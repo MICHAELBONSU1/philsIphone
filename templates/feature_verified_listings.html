@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Verified Listings - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Verified Listings</h2>
+            <p>Detailed photos and clear condition info.</p>
+        </div>
+
+        <div class="why-grid" style="margin-top: 20px;">
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-camera"></i></div>
+                <h3>Real Photos</h3>
+                <p>We share detailed images so you know what you’re getting.</p>
+            </div>
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-stethoscope"></i></div>
+                <h3>Clear Condition</h3>
+                <p>Condition details are easy to understand and transparent.</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Home</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+

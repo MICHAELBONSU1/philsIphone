@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Post Item - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="form-container">
+        <h2>{% if session.get('can_post') or session.get('is_admin') %}Post New Item{% else %}Request Posting Access{% endif %}</h2>
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('post_item') }}" class="item-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="title">Item Title</label>
+                <input type="text" id="title" name="title" placeholder="e.g., iPhone 14 Pro Max" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="5" placeholder="Describe your item..." required></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="price">Price (cedis)</label>
+                    <input type="number" id="price" name="price" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    <select id="category" name="category" required>
+                        <option value="">Select category</option>
+                        <option value="phones">Phones</option>
+                        <option value="laptops">Laptops</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="condition">Condition</label>
+                <select id="condition" name="condition" required>
+                    <option value="">Select condition</option>
+                    <option value="new">New</option>
+                    <option value="like-new">Like New</option>
+                    <option value="used">Used</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="image">Item Image</label>
+                <div class="file-upload">
+                    <input type="file" id="image" name="image" accept="image/*">
+                    <p class="file-hint">Supported: PNG, JPG, JPEG, GIF, WebP (Max 16MB)</p>
+                </div>
+            </div>
+            {% if session.get('can_post') or session.get('is_admin') %}
+            <button type="submit" class="btn btn-primary">Post Item</button>
+            {% else %}
+            <form method="POST" action="{{ url_for('request_access') }}">
+                <button type="submit" class="btn btn-primary">Request Access</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

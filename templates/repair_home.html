@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Repairs & Decoding - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="home-section">
+    <div class="home-section-header">
+      <h2>Repairs & Decoding</h2>
+      <p>Send your request to the correct assigned account. They will text you and handle everything.</p>
+    </div>
+
+    <div class="why-grid" style="margin-top:20px;">
+      <a class="why-tile" href="{{ url_for('repair_decoding') }}">
+        <div class="why-icon"><i class="fas fa-wrench"></i></div>
+        <h3>Repairs & Decoding</h3>
+        <p>Choose repairs or decoding and send your request.</p>
+      </a>
+
+    </div>
+
+    <div class="muted" style="margin-top:20px;">
+      Tip: you can open a conversation after you continue.
+    </div>
+  </div>
+</div>
+{% endblock %}
+

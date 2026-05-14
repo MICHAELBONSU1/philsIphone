@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Easy Returns - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Easy Returns</h2>
+            <p>Support when you need it.</p>
+        </div>
+
+        <div class="why-grid" style="margin-top: 20px;">
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-undo-alt"></i></div>
+                <h3>Simple Process</h3>
+                <p>Return guidance that’s straightforward and quick.</p>
+            </div>
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-headset"></i></div>
+                <h3>Friendly Support</h3>
+                <p>Get help from our team when you need it.</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Home</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+

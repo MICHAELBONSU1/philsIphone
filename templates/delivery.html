@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Delivery (Legacy) - Phil's iPhone{% endblock %}
+
+
+{% block extra_css %}
+<style>
+  .delivery-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .delivery-layout { grid-template-columns: 1fr; } }
+  .panel { background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); padding: 20px; }
+  .field { margin-bottom: 14px; }
+  .field label { font-weight: 700; display:block; margin-bottom:6px; }
+  .field input, .field select { width: 100%; padding: 12px 15px; border: 2px solid #e1e1e1; border-radius: 10px; }
+  #map { height: 520px; border-radius: 15px; }
+  .muted { color:#666; font-size: 14px; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="panel" style="margin-bottom:20px;">
+    <h2 style="margin-bottom:8px;">Delivery (Live Map)</h2>
+      <p class="muted">Sender requests delivery (system matches a rider). Recipient tracks live as the driver accepts, goes en-route, and confirms handover.</p>
+  </div>
+
+  <div class="delivery-layout">
+  <div class="panel">
+      <h3 style="margin-bottom:14px;">Bolt-like Delivery Flow</h3>
+
+
+      <div class="field">
+        <label for="recipient">Recipient User ID</label>
+        <input id="recipient" placeholder="e.g., 2" />
+      </div>
+
+
+
+      <div class="field">
+        <label>Pickup (address or city)</label>
+        <input id="pickup" placeholder="e.g., Accra" />
+      </div>
+      <div class="field">
+        <label>Dropoff (address or city)</label>
+        <input id="dropoff" placeholder="e.g., East Legon" />
+      </div>
+
+      <div class="btn-row">
+        <button id="geocodeBtn" class="btn btn-primary">Set Locations</button>
+        <button id="createBtn" class="btn btn-success">Request Delivery</button>
+
+      </div>
+
+      <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
+
+      <hr style="margin:18px 0;" />
+
+      <h3 style="margin-bottom:14px;">Delivery Guy Controls</h3>
+      <p class="muted">Enter the delivery ID you received and start sending location updates.</p>
+
+      <div class="field">
+        <label for="deliveryId">Delivery ID</label>
+        <input id="deliveryId" placeholder="e.g., 1" />
+      </div>
+      <div class="btn-row">
+        <button id="startRiderBtn" class="btn btn-primary">Start Live Updates</button>
+        <button id="stopRiderBtn" class="btn btn-danger">Stop</button>
+      </div>
+    </div>
+
+    <div>
+      <div id="map"></div>
+      <p class="muted" style="margin-top:10px;">Markers: Pickup (A), Dropoff (B), Rider (R)</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet + real-time (socket.io) -->
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+  // NOTE: Using OpenStreetMap (Nominatim) for geocoding (no API key required).
+  // This is rate-limited; you may need to add throttling later.
+
+  const socket = io();
+
+  // Initialize map
+  const map = L.map('map').setView([5.6037, -0.1870], 12);
+  // Satellite tiles (no API key) - may be blocked by CORS in some networks/browsers.
+  // If satellite looks bad, switch back to OpenStreetMap by toggling this line.
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+
+
+  let pickupLatLng = null;
+  let dropoffLatLng = null;
+
+  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  pickupMarker.bindTooltip('Pickup (A)');
+
+  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  dropoffMarker.bindTooltip('Dropoff (B)');
+
+  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  riderMarker.bindTooltip('Rider (R)');
+
+  let watchId = null;
+  let riderTimer = null;
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = 'Status: ' + msg;
+  }
+
+  let routePolyline = null;
+  let trackingPolyline = null;
+
+  function updateRoutePolyline() {
+    if (!pickupLatLng || !dropoffLatLng) return;
+
+    // Bolt-style: compute the main pickup -> dropoff route occasionally.
+    const now = Date.now();
+    if (!updateRoutePolyline.lastFetchTs) updateRoutePolyline.lastFetchTs = 0;
+    if (now - updateRoutePolyline.lastFetchTs < 60000) return;
+    updateRoutePolyline.lastFetchTs = now;
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
+
+    fetch(url)
+
+      .then(res => res.json())
+      .then(data => {
+        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return;
+        const coords = data.routes[0].geometry.coordinates;
+        const latlngs = coords.map(c => [c[1], c[0]]);
+
+        if (routePolyline) {
+          routePolyline.setLatLngs(latlngs);
+        } else {
+          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+        }
+      })
+      .catch(() => {});
+  }
+
+  async function geocode(query) {
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('Geocode failed');
+    const data = await res.json();
+    if (!data || !data.length) throw new Error('No results');
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  }
+
+  document.getElementById('geocodeBtn').addEventListener('click', async () => {
+    try {
+      setStatus('Geocoding...');
+      const pickup = document.getElementById('pickup').value.trim();
+      const dropoff = document.getElementById('dropoff').value.trim();
+      if (!pickup || !dropoff) throw new Error('Enter pickup and dropoff');
+
+      const p = await geocode(pickup);
+      const d = await geocode(dropoff);
+
+      pickupLatLng = [p.lat, p.lon];
+      dropoffLatLng = [d.lat, d.lon];
+
+      pickupMarker.setLatLng(pickupLatLng);
+      dropoffMarker.setLatLng(dropoffLatLng);
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+
+      setStatus('Locations set');
+    } catch (e) {
+      console.error(e);
+      setStatus('Error: ' + e.message);
+      alert(e.message);
+    }
+  });
+
+  document.getElementById('createBtn').addEventListener('click', async () => {
+    try {
+      const recipientId = document.getElementById('recipient').value.trim();
+      if (!recipientId) throw new Error('Enter recipient user id');
+
+      if (!pickupLatLng || !dropoffLatLng) throw new Error('Set locations first');
+
+      setStatus('Requesting delivery...');
+
+      const res = await fetch('/api/request_delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient_id: parseInt(recipientId, 10),
+          pickup_lat: pickupLatLng[0],
+          pickup_lon: pickupLatLng[1],
+          dropoff_lat: dropoffLatLng[0],
+          dropoff_lon: dropoffLatLng[1]
+        })
+      });
+
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Create delivery failed');
+
+      setStatus('Delivery created: #' + data.delivery_id);
+      // Let riderMarker update from live websocket.
+      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+    } catch (e) {
+      console.error(e);
+      setStatus('Error: ' + e.message);
+      alert(e.message);
+    }
+  });
+
+  document.getElementById('startRiderBtn').addEventListener('click', async () => {
+    try {
+      const deliveryId = document.getElementById('deliveryId').value.trim();
+      if (!deliveryId) throw new Error('Enter delivery ID');
+      const deliveryNum = parseInt(deliveryId, 10);
+      if (Number.isNaN(deliveryNum)) throw new Error('Invalid delivery ID');
+
+      setStatus('Starting live updates for delivery #' + deliveryNum);
+      socket.emit('join_delivery', { delivery_id: deliveryNum });
+
+      // Use browser geolocation
+      if (!navigator.geolocation) throw new Error('Geolocation not supported');
+
+      // Immediately watch and emit periodically
+      // Throttle websocket updates so the server and UI stay smooth.
+      // (Geolocation can fire many times per second.)
+      let lastEmitTs = 0;
+      const EMIT_INTERVAL_MS = 1000; // ~1 update/second
+
+      watchId = navigator.geolocation.watchPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        riderMarker.setLatLng([lat, lon]);
+
+        const now = Date.now();
+        if (now - lastEmitTs >= EMIT_INTERVAL_MS) {
+          lastEmitTs = now;
+          socket.emit('rider_location', {
+            delivery_id: deliveryNum,
+            lat: lat,
+            lon: lon
+          });
+        }
+      }, (err) => {
+        console.error(err);
+        setStatus('Geolocation error: ' + err.message);
+      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+    } catch (e) {
+      console.error(e);
+      setStatus('Error: ' + e.message);
+      alert(e.message);
+    }
+  });
+
+  document.getElementById('stopRiderBtn').addEventListener('click', () => {
+    if (watchId != null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    setStatus('Stopped live updates');
+  });
+
+  // Socket listeners
+  socket.on('delivery_initial', (payload) => {
+    // payload includes pickup/dropoff positions
+    if (payload && payload.pickup_lat != null) {
+      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+      pickupMarker.setLatLng(pickupLatLng);
+    }
+    if (payload && payload.dropoff_lat != null) {
+      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+      dropoffMarker.setLatLng(dropoffLatLng);
+    }
+
+    if (pickupLatLng && dropoffLatLng) {
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+    }
+  });
+
+  socket.on('rider_location_update', (payload) => {
+    if (!payload) return;
+    if (payload.lat == null || payload.lon == null) return;
+    const next = [payload.lat, payload.lon];
+    riderMarker.setLatLng(next);
+
+  // Bolt-style: keep drawing the rider's traveled path while marker moves.
+    if (pickupLatLng && dropoffLatLng) {
+      // Main route (pickup -> dropoff) stays stable.
+      updateRoutePolyline();
+
+      // Traveled path (polyline of rider points) updates every websocket tick.
+      const nextLatLng = [payload.lat, payload.lon];
+      if (!trackingPolyline) {
+        trackingPolyline = L.polyline([nextLatLng], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+      } else {
+        const latlngs = trackingPolyline.getLatLngs();
+        const last = latlngs.length ? latlngs[latlngs.length - 1] : null;
+        // Reduce jitter like Bolt: ignore tiny moves.
+        const dist = last ? map.distance(L.latLng(last.lat, last.lng), L.latLng(nextLatLng[0], nextLatLng[1])) : Infinity;
+        if (dist < 8) return; // meters
+        latlngs.push(L.latLng(nextLatLng[0], nextLatLng[1]));
+        trackingPolyline.setLatLngs(latlngs);
+
+      }
+    }
+
+
+  });
+
+
+  // Load delivery guys
+  async function loadRiders() {
+    const res = await fetch('/api/delivery_guys');
+    const data = await res.json();
+    const sel = document.getElementById('rider');
+    data.delivery_guys.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.username;
+      sel.appendChild(opt);
+    });
+  }
+
+  loadRiders();
+</script>
+{% endblock %}
+

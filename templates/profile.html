@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 70vh;
+        padding: 20px;
+    }
+    .profile-card {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 500px;
+        text-align: center;
+    }
+    .profile-card h2 {
+        margin-bottom: 20px;
+        color: #333;
+    }
+    .profile-info p {
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+        color: #555;
+    }
+    .profile-info p strong {
+        color: #000;
+    }
+    .user-id-display {
+        background-color: #e9ecef;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #007bff;
+        margin-top: 20px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-card">
+        <h2>Welcome, {{ user.username }}!</h2>
+        <div class="profile-info">
+            <p>Your unique User ID: <span class="user-id-display">{{ user.id }}</span></p>
+            <p>Email: <strong>{{ user.email }}</strong></p>
+            <p>Account Type: <strong>{{ 'Rider' if user.is_rider else 'Customer' }}</strong></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

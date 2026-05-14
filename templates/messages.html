@@ -1,0 +1,530 @@
+{% extends "base.html" %}
+
+{% block title %}Messages - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="messages-page">
+    <input type="hidden" id="my-user-id" value="{{ session.get('user_id', 0) }}">
+    <div class="conversations-sidebar">
+
+        <h3>Users</h3>
+        <ul class="user-list" id="user-list">
+            {% for user in users %}
+            <li>
+                <button class="user-btn" data-user-id="{{ user.id }}" data-username="{{ user.username }}">
+                    <i class="fas fa-user"></i> {{ user.username }}
+                    <span class="msg-unread-badge" data-user-username="{{ user.username }}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px; display:none;">0</span>
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+
+    </div>
+    <div class="chat-main">
+        <div class="chat-header" id="chat-header">
+            <span>Select a user to start messaging</span>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="no-messages">Choose a conversation to view messages</div>
+        </div>
+<form class="chat-form" id="chat-form" enctype="multipart/form-data">
+            <div style="display: flex; gap: 10px; align-items: end;">
+<input type="text" id="message-input" placeholder="Type your message...">
+                <input type="file" id="media-file" accept="image/*,video/*,audio/*" style="display: none;">
+
+                <!-- Voice note recorder -->
+                <button type="button" id="voice-record-btn" class="btn" style="background:#17a2b8; color:white;">🎤</button>
+                <button type="button" id="voice-send-btn" class="btn" style="display:none; background:#28a745; color:white;">Send Voice</button>
+                <span id="voice-recording-indicator" style="display:none; color:#dc3545; font-weight:700; font-size:12px; align-self:center;">Recording...</span>
+
+                <button type="button" id="media-btn" class="btn" style="background: #6c757d; color: white;">📎</button>
+                <button type="submit" class="btn btn-primary">Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+var currentChatUserId = null;
+var currentChatUsername = null;
+const users = JSON.parse('{{ users|tojson }}');
+
+function setNavBadgeTotal(count) {
+    const navCount = document.getElementById('messages-nav-count');
+    if (!navCount) return;
+    navCount.textContent = String(count || 0);
+    navCount.style.display = (count > 0) ? 'inline' : 'none';
+}
+
+
+function updateUnreadBadgeForUser(username, unreadCount) {
+    const badge = document.querySelector('.msg-unread-badge[data-user-username="' + username + '"]');
+    if (!badge) return;
+
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.textContent = '0';
+        badge.style.display = 'none';
+    }
+
+    // also update total nav badge (sum of all sidebar badges)
+    const total = Array.from(document.querySelectorAll('.msg-unread-badge'))
+        .reduce((sum, el) => {
+            const v = parseInt(el.textContent || '0', 10);
+            return sum + (Number.isNaN(v) ? 0 : v);
+        }, 0);
+
+    setNavBadgeTotal(total);
+}
+
+async function refreshNavBadgeTotal() {
+    try {
+        const res = await fetch('/api/unread_messages_count');
+        const data = await res.json();
+        const count = (data && typeof data.count === 'number') ? data.count : 0;
+        setNavBadgeTotal(count);
+    } catch (e) {
+        // ignore polling failures
+    }
+}
+
+let unreadPollTimer = null;
+function startUnreadPolling() {
+    if (unreadPollTimer) clearInterval(unreadPollTimer);
+    refreshNavBadgeTotal();
+    unreadPollTimer = setInterval(refreshNavBadgeTotal, 4000);
+}
+
+startUnreadPolling();
+
+// --- Socket.IO real-time messaging ---
+const socket = io({ transports: ['websocket'] });
+
+// Join per-user room once socket connects.
+// We use the logged-in user's id from a hidden value rendered into the DOM.
+const myUserId = Number(document.getElementById('my-user-id')?.value || 0);
+if (myUserId) {
+    socket.on('connect', function() {
+        socket.emit('join_user', { user_id: myUserId });
+    });
+}
+
+
+socket.on('new_message', function(payload) {
+    // payload.other_user_id = sender id (when I receive)
+    const otherId = payload && payload.other_user_id;
+    const msg = payload && payload.message;
+    if (!otherId || !msg) return;
+
+    // If currently viewing this chat, append immediately; otherwise just bump unread badge.
+    if (currentChatUserId && Number(currentChatUserId) === Number(otherId)) {
+        // Mark read optimistically
+        socket.emit('mark_read_thread', { other_user_id: otherId });
+        // Append message to current UI (simple append if in-memory DOM exists)
+        const container = document.getElementById('chat-messages');
+        if (container) {
+            const div = document.createElement('div');
+            const isMe = !!msg.is_me;
+            div.className = isMe ? 'message message-sent' : 'message message-received';
+            div.dataset.msgId = msg.id;
+            let contentHtml = (msg.content || '').trim() ? '<div class="message-text">' + msg.content + '</div>' : '';
+            if (msg.media_url) {
+                if (msg.media_type === 'image') {
+                    contentHtml += `<img src="/messages_uploads/${encodeURIComponent(msg.media_url)}" class="message-media" alt="Media" style="max-width: 200px; max-height: 200px; border-radius: 10px;">`;
+                } else if (msg.media_type === 'video') {
+                    contentHtml += `<video src="/messages_uploads/${msg.media_url}" class="message-media" controls style="max-width: 250px; max-height: 200px; border-radius: 10px;"></video>`;
+                } else if (msg.media_type === 'audio') {
+                    contentHtml += `<audio src="/messages_uploads/${msg.media_url}" controls style="width: 200px;"></audio>`;
+                }
+            }
+            div.innerHTML = `
+                <div class="message-content">
+                    ${contentHtml}
+                    <div class="message-time">${msg.created_at}</div>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+    } else {
+        // Update unread badge for sidebar user
+        updateUnreadBadgeForUser(String(otherId), 1);
+    }
+
+    // refresh nav badge total
+    refreshNavBadgeTotal();
+});
+
+socket.on('typing_on', function(data) {
+    if (!data || typeof data.from_user_id === 'undefined') return;
+    if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) {
+        showTypingIndicator(true);
+    }
+});
+
+
+socket.on('typing_off', function(data) {
+    if (!data || typeof data.from_user_id === 'undefined') return;
+    if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) {
+        showTypingIndicator(false);
+    }
+});
+
+
+socket.on('read_updated', function(data) {
+    if (!data) return;
+    // If I just opened this thread, update badges
+    if (currentChatUserId && Number(currentChatUserId) === Number(data.other_user_id)) {
+        refreshNavBadgeTotal();
+    } else {
+        refreshNavBadgeTotal();
+    }
+});
+
+
+function showTypingIndicator(on) {
+    let el = document.getElementById('typing-indicator');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'typing-indicator';
+        el.style.padding = '0 20px 10px 20px';
+        el.style.color = '#666';
+        el.style.fontSize = '12px';
+        el.innerText = 'Typing...';
+        const container = document.getElementById('chat-messages');
+        if (container) container.appendChild(el);
+    }
+    if (el) el.style.display = on ? 'block' : 'none';
+}
+
+
+
+document.querySelectorAll('.user-btn').forEach(btn => {
+
+    btn.addEventListener('click', function() {
+        currentChatUserId = this.getAttribute('data-user-id');
+        currentChatUsername = this.getAttribute('data-username');
+        document.getElementById('chat-header').innerHTML = '<span>Chat with ' + currentChatUsername + '</span>';
+        loadMessages(currentChatUserId);
+    });
+});
+
+function loadMessages(userId) {
+
+    // keep polling running even while refreshing chat thread
+    const container = document.getElementById('chat-messages');
+
+    // preserve scroll position intent (keep pinned to bottom when new messages arrive)
+    let shouldStickToBottom = true;
+
+    if (container) {
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        shouldStickToBottom = distanceFromBottom < 1000; // if user is near bottom, follow new messages
+    }
+
+socket.emit('mark_read_thread', { other_user_id: Number(userId) });
+
+    // typing indicator
+    socket.emit('typing', { other_user_id: Number(userId), is_typing: true });
+    setTimeout(() => {
+        socket.emit('typing', { other_user_id: Number(userId), is_typing: false });
+    }, 1200);
+
+
+fetch('/get_messages/' + userId)
+
+
+
+
+        .then(res => res.json())
+        .then(messages => {
+
+            // update unread counts for this thread
+            const unread = messages.filter(m => !m.is_me).length;
+            updateUnreadBadgeForUser(userId, unread);
+
+            const container = document.getElementById('chat-messages');
+
+            if (messages.length === 0) {
+                container.innerHTML = '<div class="no-messages">No messages yet</div>';
+                return;
+            }
+            container.innerHTML = '';
+            messages.forEach(msg => {
+
+                const div = document.createElement('div');
+                div.className = msg.is_me ? 'message message-sent' : 'message message-received';
+                div.dataset.msgId = msg.id;
+                
+                let contentHtml = (msg.content || '').trim() ? '<div class="message-text">' + msg.content + '</div>' : '';
+                
+                if (msg.media_url) {
+                    if (msg.media_type === 'image') {
+                        contentHtml += `<img src="/messages_uploads/${encodeURIComponent(msg.media_url)}" class="message-media" alt="Media" style="max-width: 200px; max-height: 200px; border-radius: 10px;">`;
+                    } else if (msg.media_type === 'video') {
+                        contentHtml += `<video src="/messages_uploads/${msg.media_url}" class="message-media" controls style="max-width: 250px; max-height: 200px; border-radius: 10px;"></video>`;
+                    } else if (msg.media_type === 'audio') {
+                        contentHtml += `<audio src="/messages_uploads/${msg.media_url}" controls style="width: 200px;"></audio>`;
+                    }
+                }
+                
+                div.innerHTML = `
+                    <div class="message-content">
+                        ${contentHtml}
+                        <div class="message-time">${msg.created_at}</div>
+                        ${msg.is_me ? '<button class="delete-btn" style="float: right; background: rgba(255,0,0,0.7); color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; font-size: 12px;">×</button>' : ''}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            
+            // Add delete listeners
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const msgId = this.closest('.message').dataset.msgId;
+                    if (confirm('Delete this message?')) {
+                        fetch('/delete_message/' + msgId, {method: 'POST'})
+                        .then(res => res.json())
+        .then(data => {
+            console.log('[voice] backend response', data);
+            if (data.success) {
+                                loadMessages(currentChatUserId);
+                            }
+                        });
+                    }
+                });
+            });
+            if (shouldStickToBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+}
+
+
+document.getElementById('media-btn').addEventListener('click', function() {
+    document.getElementById('media-file').click();
+});
+
+document.getElementById('media-file').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        document.getElementById('media-btn').textContent = file.name.substring(0, 10) + '...';
+    }
+});
+
+// --- WhatsApp-like voice notes (MediaRecorder) ---
+let mediaRecorder = null;
+let voiceBlob = null;
+
+const voiceRecordBtn = document.getElementById('voice-record-btn');
+const voiceSendBtn = document.getElementById('voice-send-btn');
+const voiceRecordingIndicator = document.getElementById('voice-recording-indicator');
+
+function setVoiceUiState({recording, hasVoice}) {
+    if (recording) {
+        voiceRecordingIndicator.style.display = 'inline';
+        voiceRecordBtn.disabled = true;
+        voiceSendBtn.style.display = 'none';
+    } else {
+        voiceRecordingIndicator.style.display = 'none';
+        voiceRecordBtn.disabled = false;
+        voiceSendBtn.style.display = hasVoice ? 'inline-flex' : 'none';
+    }
+}
+
+async function startVoiceRecording() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+        alert('Voice recording is not supported in this browser.');
+        return;
+    }
+
+    // reset
+    voiceBlob = null;
+    setVoiceUiState({recording:true, hasVoice:false});
+
+    // Some browsers/devices may not expose microphones consistently.
+    // Request the exact permission and fail fast with a useful error.
+    const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        }
+    });
+    mediaRecorder = new MediaRecorder(stream);
+
+    const chunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+        // stop tracks
+        stream.getTracks().forEach(t => t.stop());
+
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        voiceBlob = blob;
+
+        setVoiceUiState({recording:false, hasVoice:true});
+
+        // Keep mime type in mind: backend accepts common audio extensions.
+        // We will send using a synthesized filename when posting.
+    };
+
+    mediaRecorder.start();
+}
+
+function stopVoiceRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+}
+
+if (voiceRecordBtn && voiceSendBtn) {
+    // Better UX for iOS/Safari/Android: do NOT rely on “click” toggling.
+    // Use press-and-hold with pointer events: press -> record, release -> stop
+    // Then user can press “Send Voice”.
+    voiceRecordBtn.addEventListener('pointerdown', async function(e) {
+        e.preventDefault();
+        if (!currentChatUserId) {
+            alert('Select a conversation first.');
+            return;
+        }
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') return;
+        try {
+            await startVoiceRecording();
+        } catch (err) {
+            console.error('startVoiceRecording failed:', err);
+            const msg = (err && (err.name || err.message)) ? (err.name + (err.message ? ': ' + err.message : '')) : String(err);
+            alert('Microphone error: ' + msg);
+            setVoiceUiState({recording:false, hasVoice:false});
+        }
+    });
+
+    voiceRecordBtn.addEventListener('pointerup', function(e) {
+        e.preventDefault();
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            stopVoiceRecording();
+        }
+    });
+
+    voiceRecordBtn.addEventListener('pointercancel', function(e) {
+        e.preventDefault();
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            stopVoiceRecording();
+        }
+    });
+
+    voiceSendBtn.addEventListener('click', function() {
+        if (!currentChatUserId) {
+            alert('Select a conversation first.');
+            return;
+        }
+        if (!voiceBlob) return;
+
+        // Build a File so backend sees it as an upload
+        // IMPORTANT: backend validates by file extension (allowed_media_file).
+        // Keep the extension in an allowed list (mp3/wav/ogg/m4a). MediaRecorder on web
+        // often outputs WebM/Opus, so we keep the extension as .webm but also send the
+        // real mime type—however backend extension check must pass. We therefore use
+        // .ogg as the fallback extension (common for opus recordings) and keep mime.
+        // If your browser records only webm, this still passes extension check.
+        const fileName = 'voice_note_' + Date.now() + '.ogg';
+        const voiceFile = new File([voiceBlob], fileName, { type: voiceBlob.type || 'audio/ogg' });
+
+        const formData = new FormData();
+        formData.append('receiver', currentChatUsername);
+        // content is optional for voice notes; backend primarily checks media_file.
+        // We keep it empty for now.
+        formData.append('content', '');
+        // Debug: log file so we can see what gets sent to the backend.
+        // This helps identify why the backend can't accept the recording.
+        console.log('[voice] sending', {filename: voiceFile.name, size: voiceFile.size, type: voiceFile.type});
+        formData.append('media_file', voiceFile);
+
+        fetch('/send_message', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                voiceBlob = null;
+                voiceSendBtn.style.display = 'none';
+                document.getElementById('media-btn').textContent = '📎';
+                loadMessages(currentChatUserId);
+            } else {
+                alert('Failed to send voice message: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('Voice send error:', err);
+            alert('Network error sending voice message');
+        });
+    });
+}
+
+
+document.getElementById('chat-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!currentChatUserId) return;
+    
+    const content = document.getElementById('message-input').value.trim();
+    const mediaFile = document.getElementById('media-file').files[0];
+    
+    if (!content && !mediaFile) return;
+    
+    const formData = new FormData();
+    formData.append('receiver', currentChatUsername);
+    if (content) formData.append('content', content);
+    if (mediaFile) formData.append('media_file', mediaFile);
+    
+    fetch('/send_message', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('Send response:', data);
+        if (data.success) {
+            document.getElementById('message-input').value = '';
+            document.getElementById('media-file').value = '';
+            document.getElementById('media-btn').textContent = '📎';
+            loadMessages(currentChatUserId);
+        } else {
+            alert('Failed to send message: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error('Send error:', err);
+        alert('Network error sending message');
+    });
+});
+
+var urlParams = new URLSearchParams(window.location.search);
+var toUser = urlParams.get('to');
+var note = urlParams.get('note');
+
+if (toUser) {
+    var targetBtn = document.querySelector('.user-btn[data-username="' + toUser + '"]');
+    if (targetBtn) {
+        targetBtn.click();
+        // After messages load, auto-send the note (if provided)
+        if (note && note.trim()) {
+            // Wait a tick for loadMessages() to finish and DOM to be ready
+            setTimeout(() => {
+                document.getElementById('message-input').value = note;
+                // trigger submit
+                document.getElementById('chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }, 800);
+        }
+    }
+}
+
+</script>
+{% endblock %}

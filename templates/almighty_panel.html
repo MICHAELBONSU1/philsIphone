@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}Almighty Panel{% endblock %}
+
+{% block content %}
+<div class="container mt-4 almighty-panel">
+    <h1 class="mb-4">Almighty Panel</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2"><i class="fas fa-user-shield me-2"></i>Almighty System Control</h1>
+        <span class="badge bg-primary rounded-pill">System Admin Mode</span>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-dark text-white text-center p-3 almighty-stat-card">
+                <div class="h3 mb-0">{{ users|length }}</div>
+                <small class="text-muted">Total Users</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-dark text-white text-center p-3 almighty-stat-card">
+                <div class="h3 mb-0">{{ items|length }}</div>
+                <small class="text-muted">Global Items</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-dark text-white text-center p-3 almighty-stat-card">
+                <div class="h3 mb-0">{{ deliveries|length }}</div>
+                <small class="text-muted">Deliveries</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-dark text-white text-center p-3 almighty-stat-card">
+                <div class="h3 mb-0">{{ requests|selectattr('status', 'equalto', 'pending')|list|length }}</div>
+                <small class="text-muted">Pending Requests</small>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-pills mb-4 almighty-tabs shadow-sm p-2 rounded" id="almightyTabs" role="tablist">
+        <li class="nav-item"><a class="nav-link active" id="users-tab" data-bs-toggle="tab" href="#users" role="tab" aria-controls="users" aria-selected="true">Users</a></li>
+        <li class="nav-item"><a class="nav-link" id="items-tab" data-bs-toggle="tab" href="#items" role="tab" aria-controls="items" aria-selected="false">Items</a></li>
+        <li class="nav-item"><a class="nav-link" id="deliveries-tab" data-bs-toggle="tab" href="#deliveries" role="tab" aria-controls="deliveries" aria-selected="false">Deliveries</a></li>
+        <li class="nav-item"><a class="nav-link" id="requests-tab" data-bs-toggle="tab" href="#requests" role="tab" aria-controls="requests" aria-selected="false">Requests</a></li>
+        <li class="nav-item"><a class="nav-link" id="messages-tab" data-bs-toggle="tab" href="#messages" role="tab" aria-controls="messages" aria-selected="false">Messages</a></li>
+    </ul>
+
+    <div class="tab-content mt-3" id="almightyTabsContent">
+        <div class="tab-pane fade show active" id="users" role="tabpanel" aria-labelledby="users-tab">
+            <h2>All Users</h2>
+            {% if users|length == 0 %}
+                <div class="almighty-empty mt-3">No users found.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Admin</th>
+                            <th>Can Post</th>
+                            <th>Rider</th>
+                            <th>Almighty</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+                            <td>{{ 'Yes' if user.can_post else 'No' }}</td>
+                            <td>{{ 'Yes' if user.is_rider else 'No' }}</td>
+                            <td>{{ 'Yes' if user.is_almighty else 'No' }}</td>
+                            <td>
+                                {% if not user.is_almighty %}
+                                <a href="{{ url_for('almighty_delete_user', user_id=user.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete {{ user.username }}?');">Delete</a>
+                                <a href="{{ url_for('almighty_toggle_admin', user_id=user.id) }}" class="btn btn-info btn-sm">Toggle Admin</a>
+                                    {% if user.can_post %}
+                                        <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-warning btn-sm">Revoke Post</a>
+                                    {% else %}
+                                        <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success btn-sm">Approve Post</a>
+                                    {% endif %}
+                                    {% endif %}
+                                </td>
+
+                        </tr>
+                        {% endfor %}
+
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">User Management</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>User</th>
+                                    <th>Roles</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ user.username }}</div>
+                                        <div class="small text-muted">{{ user.email }}</div>
+                                    </td>
+                                    <td>
+                                        {% if user.is_almighty %}<span class="badge bg-dark">Almighty</span>{% endif %}
+                                        {% if user.is_admin %}<span class="badge bg-primary">Admin</span>{% endif %}
+                                        {% if user.is_rider %}<span class="badge bg-info text-dark">Rider</span>{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if user.can_post %}
+                                            <span class="badge bg-success">Seller</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Customer</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            {% if not user.is_almighty %}
+                                            <a href="{{ url_for('almighty_toggle_admin', user_id=user.id) }}" class="btn btn-outline-primary" title="Toggle Admin">Admin</a>
+                                            {% if user.can_post %}
+                                            <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-outline-warning">Revoke</a>
+                                            {% else %}
+                                            <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-outline-success">Approve</a>
+                                            {% endif %}
+                                            <a href="{{ url_for('almighty_delete_user', user_id=user.id) }}" class="btn btn-danger" onclick="return confirm('Delete user?');">Del</a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="items" role="tabpanel" aria-labelledby="items-tab">
+            <h2>All Items</h2>
+            {% if items|length == 0 %}
+                <div class="almighty-empty mt-3">No items found.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Seller</th>
+                            <th>Price</th>
+                            <th>Category</th>
+                            <th>Condition</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.title }}</td>
+                            <td>{{ item.seller.username }}</td>
+                            <td>${{ "%.2f"|format(item.price) }}</td>
+                            <td>{{ item.category }}</td>
+                            <td>{{ item.condition }}</td>
+                            <td>
+                                <a href="{{ url_for('almighty_delete_item', item_id=item.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this item?');">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Item Inventory (Global)</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Seller</th>
+                                    <th>Price</th>
+                                    <th>Category</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ item.title }}</div>
+                                        <small class="text-muted text-capitalize">{{ item.condition }}</small>
+                                    </td>
+                                    <td>{{ item.seller.username }}</td>
+                                    <td class="text-success fw-bold">${{ "%.2f"|format(item.price) }}</td>
+                                    <td><span class="badge rounded-pill bg-light text-dark border">{{ item.category }}</span></td>
+                                    <td>
+                                        <a href="{{ url_for('almighty_delete_item', item_id=item.id) }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete item?');">Delete</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="deliveries" role="tabpanel" aria-labelledby="deliveries-tab">
+            <h2>All Deliveries</h2>
+            {% if deliveries|length == 0 %}
+                <div class="almighty-empty mt-3">No deliveries found.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Sender</th>
+                            <th>Recipient</th>
+                            <th>Rider</th>
+                            <th>Status</th>
+                            <th>Price</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for delivery in deliveries %}
+                        <tr>
+                            <td>{{ delivery.id }}</td>
+                            <td>{{ delivery.sender.username }}</td>
+                            <td>{{ delivery.recipient.username if delivery.recipient else 'N/A' }}</td>
+                            <td>{{ delivery.accepted_rider.username if delivery.accepted_rider else 'N/A' }}</td>
+                            <td>{{ delivery.status }}</td>
+                            <td>${{ "%.2f"|format(delivery.price_cents / 100) }}</td>
+                            <td>{{ delivery.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <a href="{{ url_for('almighty_delete_delivery', delivery_id=delivery.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this delivery?');">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">System Deliveries</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Participants</th>
+                                    <th>Price</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for delivery in deliveries %}
+                                <tr>
+                                    <td>
+                                        <span class="badge {% if delivery.status == 'paid' %}bg-success{% elif delivery.status == 'requested' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+                                            {{ delivery.status.replace('_', ' ').capitalize() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="small"><b>From:</b> {{ delivery.sender.username }}</div>
+                                        <div class="small"><b>To:</b> {{ delivery.recipient.username if delivery.recipient else 'Guest' }}</div>
+                                        {% if delivery.accepted_rider %}
+                                            <div class="small text-primary"><b>Rider:</b> {{ delivery.accepted_rider.username }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="fw-bold">${{ "%.2f"|format(delivery.price_cents / 100) }}</td>
+                                    <td class="small">{{ delivery.created_at.strftime('%m/%d %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('almighty_delete_delivery', delivery_id=delivery.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete delivery log?');">Remove</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="requests" role="tabpanel" aria-labelledby="requests-tab">
+            <h2>All Posting Requests</h2>
+            {% if requests|length == 0 %}
+                <div class="almighty-empty mt-3">No requests found.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Status</th>
+                            <th>Requested At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in requests %}
+                        <tr>
+                            <td>{{ req.id }}</td>
+                            <td>{{ req.user.username }}</td>
+                            <td>{{ req.status }}</td>
+                            <td>{{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if req.status == 'pending' %}
+                                <a href="{{ url_for('approve_request', request_id=req.id) }}" class="btn btn-success btn-sm">Approve</a>
+                                {% endif %}
+                                <a href="{{ url_for('almighty_delete_request', request_id=req.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this request?');">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="tab-pane fade" id="messages" role="tabpanel" aria-labelledby="messages-tab">
+            <h2>All System Messages</h2>
+            {% if messages|length == 0 %}
+                <div class="almighty-empty mt-3">No messages found.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Sender</th>
+                            <th>Receiver</th>
+                            <th>Content</th>
+                            <th>Media</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for msg in messages %}
+                        <tr>
+                            <td>{{ msg.id }}</td>
+                            <td>{{ msg.sender.username }}</td>
+                            <td>{{ msg.receiver.username }}</td>
+                            <td>{{ msg.content|truncate(50) }}</td>
+                            <td>
+                                {% if msg.media_url %}
+                                    <span class="badge bg-secondary">{{ msg.media_type }}</span>
+                                {% else %}
+                                    <span class="text-muted">Text</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <a href="{{ url_for('almighty_delete_message', msg_id=msg.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to hard-delete this message?');">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

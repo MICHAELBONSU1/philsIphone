@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.title }} - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="item-detail">
+<div class="item-detail-image">
+            {% if item.image_url %}
+            <img src="{{ url_for('uploaded_file', filename=item.image_url) }}" alt="{{ item.title }}">
+            {% else %}
+            <i class="fas {% if item.category == 'phone' %}fa-mobile-alt{% else %}fa-laptop{% endif %}"></i>
+            {% endif %}
+        </div>
+        <div class="item-detail-info">
+            <h1>{{ item.title }}</h1>
+            <p class="item-price-large">₵{{ "%.2f"|format(item.price) }}</p>
+            <div class="item-meta">
+                <span class="badge badge-{{ item.condition }}">{{ item.condition }}</span>
+                <span class="category">{{ item.category }}</span>
+                <span class="seller">Seller: {{ item.seller.username }}</span>
+                <span class="date">Posted: {{ item.created_at.strftime('%Y-%m-%d') }}</span>
+            </div>
+            <div class="item-description">
+                <h3>Description</h3>
+                <p>{{ item.description }}</p>
+            </div>
+            {% if session.get('user_id') and session.get('user_id') != item.seller_id %}
+            <button class="btn btn-primary" onclick="startConversation('{{ item.seller.username }}')">
+                <i class="fas fa-envelope"></i> Message Seller
+            </button>
+            {% endif %}
+            {% if session.get('user_id') == item.seller_id or session.get('is_admin') %}
+            <a href="{{ url_for('delete_item', item_id=item.id) }}" class="btn btn-danger" onclick="return confirm('Are you sure?')">
+                <i class="fas fa-trash"></i> Delete Item
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function startConversation(sellerUsername) {
+    window.location.href = "{{ url_for('messages') }}?to=" + sellerUsername;
+}
+</script>
+{% endblock %}

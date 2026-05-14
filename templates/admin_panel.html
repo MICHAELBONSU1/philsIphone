@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="admin-panel">
+        <h2>Admin</h2>
+        
+        <div class="admin-section">
+            <h3>Pending Posting Requests</h3>
+            {% if requests %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Requested</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                    <tr>
+                        <td>{{ req.user.username }}</td>
+                        <td>{{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('approve_request', request_id=req.id) }}" class="btn btn-success">Approve</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No pending requests</p>
+            {% endif %}
+        </div>
+        
+        <div class="admin-section">
+            <h3>Pending User Approvals</h3>
+            {% if pending_users %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Joined</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in pending_users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if user.can_post %}
+                            <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-danger">Revoke</a>
+                            {% else %}
+                            <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success">Approve</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No pending users</p>
+            {% endif %}
+        </div>
+        
+        <div class="admin-section">
+            <h3>Approved Sellers</h3>
+            {% if approved_users %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in approved_users %}
+                    <tr>
+                        <td>{{ user.username }} {% if user.can_post %}<span style="color: green;">✓</span>{% endif %}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if user.can_post %}
+                            <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-danger">Revoke</a>
+                            {% else %}
+                            <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success">Approve</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No approved sellers yet</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

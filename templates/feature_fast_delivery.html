@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Fast Delivery - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Fast Delivery</h2>
+            <p>Quick processing and smooth handoff.</p>
+        </div>
+
+        <div class="why-grid" style="margin-top: 20px;">
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-shipping-fast"></i></div>
+                <h3>Fast Processing</h3>
+                <p>We confirm listings quickly so you can get your device sooner.</p>
+            </div>
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-route"></i></div>
+                <h3>Reliable Handoff</h3>
+                <p>Clear updates from dispatch to delivery.</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Home</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+

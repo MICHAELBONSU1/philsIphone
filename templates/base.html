@@ -1,0 +1,116 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Phil's iPhone{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-left">
+<div class="nav-brand">
+                    <a href="{{ url_for('splash') }}">Phil's iPhone
+                        <img src="{{ url_for('static', filename='images/logo1.png') }}" alt="Logo" style="height: 40px; vertical-align: middle; margin-left: 10px;">
+                    </a>
+                </div>
+            </div>
+            <div class="navbar-center">
+                <ul class="nav-menu">
+                    <li><a href="{{ url_for('index') }}">Home</a></li>
+                    <li><a href="{{ url_for('profile') }}">Profile</a></li>
+                    <li><a href="{{ url_for('index') }}?category=phones">Phones</a></li>
+                    <li><a href="{{ url_for('index') }}?category=laptops">Laptops</a></li>
+                    {% if session.get('user_id') %}
+                        <li><a href="{{ url_for('messages') }}" id="messages-nav-link">Messages <span id="messages-nav-count" style="display:none; color:#ff3b30; font-weight:700;">0</span></a></li>
+
+                    {% if session.get('can_post') or session.get('is_admin') %}
+                        <li><a href="{{ url_for('post_item') }}">Post</a></li>
+                    {% endif %}
+                    
+                    {% if session.get('user_id') %}
+                        <li><a href="{{ url_for('delivery_sender') }}">Send</a></li>
+                        <li><a href="{{ url_for('delivery_recipient') }}">Incoming</a></li>
+                    {% endif %}
+
+                    {% if session.get('is_rider') %}
+                        <li><a href="{{ url_for('delivery_admin') }}">Portal</a></li>
+                    {% endif %}
+                    {% if session.get('is_admin') %}
+                        <li><a href="{{ url_for('admin_panel') }}">Admin</a></li>
+                    {% endif %}
+
+
+
+
+
+                    <li class="user-menu">
+
+                        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+                    </li>
+
+
+                {% else %}
+
+                    <li><a href="{{ url_for('login') }}">Login</a></li>
+                    <li><a href="{{ url_for('register') }}">Register</a></li>
+                {% endif %}
+            </ul>
+            </div>
+            <div class="navbar-right">
+                <button class="theme-toggle" aria-label="Toggle theme" title="Toggle dark/light mode">
+                    <i class="fas fa-sun" aria-hidden="true"></i>
+                </button>
+                <div class="hamburger">
+
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Phil's iPhone. All rights reserved.</p>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-light);">
+                <h4 style="color: white; margin-bottom: 15px;">Contact Us</h4>
+                <p><i class="fas fa-phone"></i> <strong>0554799502</strong></p>
+                <p><i class="fab fa-whatsapp"></i> <strong>WhatsApp: 0554799502</strong></p>
+                <p><i class="fas fa-envelope"></i> <strong>Phhilsiphones@gmail.com</strong></p>
+                <p><i class="fas fa-envelope"></i> <strong>Active: donkohp27@gmail.com</strong></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/unread_messages_count');
+                const data = await res.json();
+                const count = (data && typeof data.count === 'number') ? data.count : 0;
+                const navCount = document.getElementById('messages-nav-count');
+                if (!navCount) return;
+                navCount.textContent = String(count);
+                // CSS handles visibility; just toggle display
+                navCount.style.display = (count > 0) ? 'inline-block' : 'none';
+
+            } catch (e) {
+                console.error('unread_messages_count failed', e);
+            }
+
+        })();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

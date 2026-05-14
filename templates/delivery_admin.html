@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block title %}Delivery Admin - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+  .delivery-admin-layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .delivery-admin-layout { grid-template-columns: 1fr; } }
+  .panel { background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); padding: 20px; }
+  .muted { color:#666; font-size: 14px; }
+  .field { margin-bottom:20px; }
+  .field label { font-weight: 600; color: #555; }
+  .field input { width:100%; padding:12px 15px; border:2px solid #e1e1e1; border-radius:10px; }
+  .details-card { background: #fff; border: 1px solid #e1e1e1; padding: 20px; margin-top: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+  .details-card h4 { margin-top: 0; margin-bottom: 15px; color: #2f80ed; font-weight: 700; font-size: 1.1rem; }
+  .details-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .btn-row .btn { flex: 1; padding: 15px; font-size: 1rem; }
+  .timeline { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+  .timeline .row { display:flex; justify-content:space-between; gap:10px; padding:8px 0; font-size: 13px; color: #666; }
+  #map { height: 400px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #eee; }
+  .chip { padding:4px 12px; border-radius:999px; background:#f2f4f7; font-weight:700; color: #444; font-size: 11px; }
+  .active-chip { background: #2f80ed; color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" data-user-id="{{ session['user_id'] }}">
+  <div class="home-section" style="margin-bottom:20px;">
+    <div class="home-section-header">
+      <h2>Delivery Portal (Driver)</h2>
+      <p class="muted">Accept jobs, confirm roadside handover, then mark payment as completed.</p>
+    </div>
+  </div>
+
+  <div class="delivery-admin-layout">
+    <div class="panel">
+      <h3 style="margin-bottom:6px;">Incoming Offers</h3>
+      <p class="muted" style="margin-top:0;">Matches are emitted in real-time to your rider room.</p>
+
+      <div class="field">
+        <label>Current Delivery ID</label>
+        <input id="deliveryId" placeholder="Waiting for offer..." disabled value="{{ active_delivery.id if active_delivery else '' }}" />
+      </div>
+
+      <div id="offerDetails" class="details-card" style="{% if active_delivery %}display:block;{% else %}display:none;{% endif %}">
+        <h4>Delivery Details</h4>
+        <div class="details-row"><span>Item:</span><strong id="detailType">{{ active_delivery.package_type if active_delivery else '-' }}</strong></div>
+        <div class="details-row"><span>Urgency:</span><strong id="detailUrgency">{{ active_delivery.urgency_level if active_delivery else '-' }}</strong></div>
+        <hr>
+        <div class="details-row"><span>From:</span><span id="detailPickup">{{ active_delivery.pickup_address if active_delivery else '-' }}</span></div>
+        <div class="details-row"><span>To:</span><span id="detailDropoff">{{ active_delivery.dropoff_address if active_delivery else '-' }}</span></div>
+        <div class="details-row"><span>Fare:</span><strong id="detailPrice">{% if active_delivery %}₵{{ "%.2f"|format(active_delivery.price_cents / 100) }}{% else %}-{% endif %}</strong></div>
+      </div>
+
+      <div class="btn-row">
+        <button id="acceptBtn" class="btn btn-primary"><i class="fas fa-check"></i> Accept Job</button>
+        <button id="goOnlineBtn" class="btn btn-success" style="display:none;">
+          <i class="fas fa-location-arrow"></i> Start Tracking (Go Online)
+        </button>
+        <button id="arriveBtn" class="btn btn-info" style="display:none;">Arrived at Pickup</button>
+        <button id="pickedUpBtn" class="btn btn-primary" style="display:none;">Start Trip (Picked Up)</button>
+        <button id="arriveDropoffBtn" class="btn btn-info" style="display:none;">Arrived at Dropoff</button>
+      </div>
+
+      <hr style="margin:18px 0;" />
+
+      <h3 style="margin-bottom:6px;">Handover & Payment</h3>
+      <p class="muted">When you hand the package to the recipient, confirm handover.</p>
+
+      <div class="btn-row">
+        <button id="handoverBtn" class="btn btn-success"><i class="fas fa-handshake"></i> Handover</button>
+        <button id="payBtn" class="btn btn-warning"><i class="fas fa-money-bill-wave"></i> Payment</button>
+      </div>
+
+      <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
+
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-bottom:6px;">Live Route</h3>
+      <div id="map"></div>
+      <p class="muted" style="margin-top:10px;">Markers: Pickup (A), Dropoff (B), You (R)</p>
+
+      <hr style="margin:18px 0;" />
+      <h3 style="margin-bottom:6px;">Status Flow</h3>
+      <div class="timeline">
+        <div class="row"><span>requested</span><span class="chip">Sender created</span></div>
+        <div class="row"><span>matched</span><span class="chip">Offer sent</span></div>
+        <div class="row"><span>accepted</span><span class="chip">Driver accepts</span></div>
+        <div class="row"><span>arrived_at_pickup</span><span class="chip">At Source</span></div>
+        <div class="row"><span>picked_up</span><span class="chip">Trip started</span></div>
+        <div class="row"><span>arrived_at_dropoff</span><span class="chip">At Dest</span></div>
+        <div class="row"><span>roadside_handover</span><span class="chip">Driver confirms</span></div>
+        <div class="row"><span>paid</span><span class="chip">Mock payment</span></div>
+      </div>
+
+      <hr style="margin:18px 0;" />
+      <p class="muted">Tip: Open multiple tabs (Delivery page as sender/recipient, then this portal as driver) to see live updates.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket = io();
+
+  let currentDeliveryId = {{ active_delivery.id if active_delivery else 'null' }};
+  let currentStatus = null;
+
+  const statusEl = document.getElementById('status');
+  function setStatus(msg) {
+    if (statusEl) statusEl.textContent = 'Status: ' + msg;
+  }
+
+  function updateButtonVisibility(status) {
+    const btnIds = {
+      matched: ['acceptBtn'],
+      requested: ['acceptBtn'],
+      accepted: ['arriveBtn'],
+      arrived_at_pickup: ['pickedUpBtn'],
+      en_route: [],
+      picked_up: ['arriveDropoffBtn'],
+      arrived_at_dropoff: [],
+      roadside_handover: [],
+      paid: []
+    };
+
+    ['acceptBtn','goOnlineBtn','arriveBtn','pickedUpBtn','arriveDropoffBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+
+    if (status && btnIds[status]) {
+      btnIds[status].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'block';
+      });
+    }
+
+    // Enable goOnline only when we’re accepted/requested (depending on your flow)
+    if (status === 'accepted' || status === 'requested') {
+      const goBtn = document.getElementById('goOnlineBtn');
+      if (goBtn) goBtn.style.display = 'block';
+    }
+  }
+
+  // Map Initialization
+  const map = L.map('map').setView([5.6037, -0.1870], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let pickupLatLng = null;
+  let dropoffLatLng = null;
+
+  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  pickupMarker.bindTooltip('Pickup (A)');
+
+  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  dropoffMarker.bindTooltip('Dropoff (B)');
+
+  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  riderMarker.bindTooltip('You (R)');
+
+  let routePolyline = null;
+  let trackingPolyline = null;
+  let watchId = null;
+
+  function updateRoutePolyline() {
+    if (!pickupLatLng || !dropoffLatLng) return;
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return;
+        const coords = data.routes[0].geometry.coordinates;
+        const latlngs = coords.map(c => [c[1], c[0]]);
+
+        if (routePolyline) {
+          routePolyline.setLatLngs(latlngs);
+        } else {
+          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+        }
+      })
+      .catch(() => {});
+  }
+
+  function renderTimeline(payload) {
+    const el = document.getElementById('timeline');
+    if (!el) return;
+
+    const status = payload && payload.status ? payload.status : 'unknown';
+    const rows = [
+      ['status', status],
+      ['matched_at', payload.matched_at || ''],
+      ['accepted_at', payload.accepted_at || ''],
+      ['arrived_at_pickup_at', payload.arrived_at_pickup_at || ''],
+      ['picked_up_at', payload.picked_up_at || ''],
+      ['arrived_at_dropoff_at', payload.arrived_at_dropoff_at || ''],
+      ['handover_confirmed_at', payload.handover_confirmed_at || ''],
+      ['paid_at', payload.paid_at || ''],
+    ];
+
+    el.innerHTML = '';
+    for (const [k,v] of rows) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<span>${k}</span><span>${v || '-'}</span>`;
+      el.appendChild(row);
+    }
+  }
+
+  function startLocationTracking() {
+    if (!currentDeliveryId) return;
+    socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+
+    if (watchId !== null) return;
+    if (!navigator.geolocation) {
+      console.error('Geolocation not supported');
+      return;
+    }
+
+    let lastEmitTs = 0;
+    const EMIT_INTERVAL_MS = 2000;
+
+    watchId = navigator.geolocation.watchPosition((pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      riderMarker.setLatLng([lat, lon]);
+
+      const now = Date.now();
+      if (now - lastEmitTs >= EMIT_INTERVAL_MS) {
+        lastEmitTs = now;
+        socket.emit('rider_location', {
+          delivery_id: currentDeliveryId,
+          lat,
+          lon
+        });
+      }
+    }, (err) => {
+      console.error('Geolocation error:', err);
+    }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  }
+
+  async function postJson(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const contentType = res.headers.get('content-type');
+    let data = {};
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json();
+    }
+    if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
+    return data;
+  }
+
+  document.getElementById('acceptBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) throw new Error('No delivery to accept');
+      setStatus('accepting...');
+      await postJson('/api/rider_accept_delivery', { delivery_id: currentDeliveryId });
+      setStatus('accepted');
+      socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('goOnlineBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) throw new Error('No active delivery');
+
+      // Join room first so everyone will receive updates immediately.
+      socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+
+      setStatus('starting trip (en_route)...');
+      await postJson('/api/rider_go_online', { delivery_id: currentDeliveryId });
+
+      setStatus('en_route');
+      startLocationTracking();
+    } catch (e) {
+      console.error(e);
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('arriveBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) return;
+      setStatus('notifying arrival at pickup...');
+      await postJson('/api/rider_arrive_pickup', { delivery_id: currentDeliveryId });
+      setStatus('arrived at pickup');
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('pickedUpBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) return;
+      setStatus('starting trip...');
+      await postJson('/api/rider_picked_up', { delivery_id: currentDeliveryId });
+      setStatus('trip started');
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('arriveDropoffBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) return;
+      setStatus('notifying arrival at dropoff...');
+      await postJson('/api/rider_arrive_dropoff', { delivery_id: currentDeliveryId });
+      setStatus('arrived at dropoff');
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('handoverBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) throw new Error('No active delivery');
+      setStatus('confirming handover...');
+      await postJson('/api/confirm_handover', { delivery_id: currentDeliveryId });
+      setStatus('handover confirmed');
+      socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('payBtn').addEventListener('click', async () => {
+    try {
+      if (!currentDeliveryId) throw new Error('No active delivery');
+      setStatus('processing payment...');
+      await postJson('/api/process_payment', { delivery_id: currentDeliveryId });
+      setStatus('payment processed');
+      socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+    } catch (e) {
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  socket.on('delivery_initial', (payload) => {
+    if (!payload) return;
+
+    if (payload.pickup_lat != null && payload.pickup_lon != null) {
+      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+      pickupMarker.setLatLng(pickupLatLng);
+    }
+
+    if (payload.dropoff_lat != null && payload.dropoff_lon != null) {
+      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+      dropoffMarker.setLatLng(dropoffLatLng);
+    }
+
+    if (pickupLatLng && dropoffLatLng) {
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [40, 40] });
+      updateRoutePolyline();
+    }
+
+    renderTimeline(payload);
+    updateButtonVisibility(payload.status);
+  });
+
+  socket.on('connect', () => {
+    setStatus('connected');
+    const container = document.querySelector('.container[data-user-id]');
+    if (container) {
+      socket.emit('join_rider_portal', { rider_id: parseInt(container.dataset.userId, 10) });
+    }
+
+    if (currentDeliveryId) {
+      socket.emit('join_delivery', { delivery_id: currentDeliveryId });
+    }
+  });
+
+  socket.on('delivery_offer', (payload) => {
+    if (!payload || !payload.delivery_id) return;
+
+    currentDeliveryId = payload.delivery_id;
+    document.getElementById('deliveryId').value = String(currentDeliveryId);
+
+    setStatus('offer received (status=' + payload.status + ')');
+    currentStatus = payload.status;
+    renderTimeline(payload);
+
+    const details = document.getElementById('offerDetails');
+    if (details) {
+      details.style.display = 'block';
+      document.getElementById('detailType').textContent = (payload.package_type || 'Parcel') + ' (' + (payload.package_size || 'M') + ')';
+      document.getElementById('detailUrgency').textContent = payload.urgency_level || 'Standard';
+      document.getElementById('detailPickup').textContent = payload.pickup_address || 'Current Map Location';
+      document.getElementById('detailDropoff').textContent = payload.dropoff_address || 'Destination';
+      document.getElementById('detailPrice').textContent = payload.price ? '₵' + payload.price : '-';
+    }
+
+    if (payload.pickup_lat && payload.pickup_lon) {
+      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+      pickupMarker.setLatLng(pickupLatLng);
+    }
+    if (payload.dropoff_lat && payload.dropoff_lon) {
+      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+      dropoffMarker.setLatLng(dropoffLatLng);
+    }
+    if (pickupLatLng && dropoffLatLng) {
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [40, 40] });
+      updateRoutePolyline();
+    }
+
+    // button visibility based on offer status
+    updateButtonVisibility(payload.status);
+
+    // Stop showing old tracking path when a new job comes in
+    trackingPolyline = null;
+  });
+
+  socket.on('delivery_status_update', (payload) => {
+    if (!payload) return;
+    if (payload.delivery_id && currentDeliveryId && payload.delivery_id !== currentDeliveryId) return;
+
+    if (payload.delivery_id) currentDeliveryId = payload.delivery_id;
+    currentStatus = payload.status || currentStatus;
+    document.getElementById('deliveryId').value = String(currentDeliveryId || '');
+
+    setStatus('status updated: ' + (payload.status || 'unknown'));
+    updateButtonVisibility(currentStatus);
+    renderTimeline(payload);
+  });
+
+  socket.on('rider_location_update', (payload) => {
+    if (!payload || payload.lat == null || payload.lon == null) return;
+
+    const next = [payload.lat, payload.lon];
+    riderMarker.setLatLng(next);
+
+    if (pickupLatLng && dropoffLatLng) {
+      updateRoutePolyline();
+
+      if (!trackingPolyline) {
+        trackingPolyline = L.polyline([next], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+      } else {
+        const latlngs = trackingPolyline.getLatLngs();
+        latlngs.push(L.latLng(next[0], next[1]));
+        trackingPolyline.setLatLngs(latlngs);
+      }
+    }
+  });
+</script>
+{% endblock %}
+

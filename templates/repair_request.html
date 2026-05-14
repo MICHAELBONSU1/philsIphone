@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Repair & Decoding Request - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+  .request-box { background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); padding: 25px; }
+  .muted { color:#666; font-size: 14px; }
+  .field { margin-bottom: 14px; }
+  .field label { font-weight: 700; display:block; margin-bottom:6px; }
+  .field input, .field select, .field textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e1e1; border-radius: 10px; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="request-box">
+    <h2 style="margin-bottom:8px;">Repair & Decoding Request</h2>
+    <p class="muted">Choose what you need and we will redirect you to the assigned admin account so you can text and sort it out.</p>
+
+    <div class="field" style="margin-top:18px;">
+      <label for="serviceType">Service</label>
+      <select id="serviceType">
+        <option value="">-- Select --</option>
+        <option value="repairs">Repairs</option>
+        <option value="decoding">Decoding</option>
+      </select>
+    </div>
+
+    <div class="field" id="carrierField" style="display:none;">
+      <label for="carrier">Carrier (for Decoding)</label>
+      <select id="carrier">
+        <option value="">-- Select Carrier --</option>
+        <option value="AT&T">AT&T</option>
+        <option value="T-Mobile">T-Mobile</option>
+        <option value="Verizon Wireless">Verizon Wireless</option>
+        <option value="Xfinity Mobile,">Xfinity Mobile</option>
+        <option value="Spectrum Mobile">Spectrum Mobile</option>
+        <option value="Boost Mobile">Boost Mobile</option>
+        <option value="others">others</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Your phone/notes (optional)</label>
+      <input id="notes" placeholder="e.g., iPhone 12, screen issue, carrier issue..." />
+    </div>
+
+
+    <div class="btn-row">
+      <button id="goBtn" class="btn btn-primary">Continue</button>
+      <a class="btn btn-block btn-success" href="{{ url_for('index') }}" style="text-decoration:none;">Back</a>
+    </div>
+
+    <p class="muted" style="margin-top:14px;" id="status">Status: idle</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const repairsAdminUsername = "phil";
+  const decodingAdminUsername = "phil";
+
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = 'Status: ' + msg;
+  }
+
+  function syncCarrierVisibility() {
+    const type = document.getElementById('serviceType').value;
+    const carrierField = document.getElementById('carrierField');
+    if (!carrierField) return;
+
+    if (type === 'decoding') {
+      carrierField.style.display = 'block';
+    } else {
+      carrierField.style.display = 'none';
+    }
+  }
+
+  document.getElementById('serviceType').addEventListener('change', () => {
+    syncCarrierVisibility();
+  });
+
+  // Initial state
+  syncCarrierVisibility();
+
+  document.getElementById('goBtn').addEventListener('click', () => {
+    const type = document.getElementById('serviceType').value;
+    const notes = document.getElementById('notes').value.trim();
+    const carrier = document.getElementById('carrier') ? document.getElementById('carrier').value : '';
+
+    if (!type) {
+      alert('Select Repairs or Decoding');
+      return;
+    }
+
+    if (type === 'decoding' && !carrier) {
+      alert('Please select a carrier for Decoding');
+      return;
+    }
+
+    // Always send to the main admin account
+    const toUser = 'phil';
+
+
+    // Reuse the /messages page with the existing auto-select logic.
+    // We pass ?to=USERNAME and also a short note in query string.
+    const extraNote = type === 'decoding' ? `Carrier: ${carrier}` : '';
+    const combinedNote = [notes, extraNote].filter(Boolean).join(' | ');
+
+    const url = `/messages?to=${encodeURIComponent(toUser)}${combinedNote ? `&note=${encodeURIComponent(combinedNote)}` : ''}`;
+    setStatus('Redirecting...');
+    window.location.href = url;
+  });
+
+</script>
+{% endblock %}
+

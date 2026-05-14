@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block title %}Delivery (Sender) - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+  .delivery-layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .delivery-layout { grid-template-columns: 1fr; } }
+  .panel { background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); padding: 20px; }
+  .field { margin-bottom: 14px; }
+  .field label { font-weight: 600; display:block; margin-bottom:6px; color: #555; font-size: 0.9rem; }
+  .field input, .field select, .field textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e1e1; border-radius: 10px; font-family: inherit; }
+  .field input:focus { border-color: #2f80ed; outline: none; box-shadow: 0 0 0 3px rgba(47,128,237,0.1); }
+  .section-title { font-size: 1rem; font-weight: 700; color: #2f80ed; margin: 25px 0 12px 0; display: flex; align-items: center; gap: 8px; }
+  .section-title i { font-size: 0.9rem; }
+  .details-card { background: linear-gradient(135deg, #2f80ed 0%, #56ccf2 100%); color: white; padding: 20px; margin-top: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(47,128,237,0.3); }
+  .details-card h4 { margin-bottom: 10px; font-weight: 600; }
+  .details-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  #map { height: 520px; border-radius: 15px; border: 1px solid #eee; }
+  .muted { color:#666; font-size: 14px; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .timeline { margin-top: 20px; position: relative; padding-left: 20px; }
+  .timeline::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #e1e1e1; }
+  .timeline .row { position: relative; display:flex; justify-content:space-between; gap:10px; padding:10px 0; font-size: 13px; color: #444; }
+  .timeline .row::before { content: ''; position: absolute; left: -24px; top: 15px; width: 10px; height: 10px; border-radius: 50%; background: #2f80ed; border: 2px solid white; box-shadow: 0 0 0 2px #e1e1e1; }
+  .timeline .row.empty::before { background: #e1e1e1; box-shadow: none; }
+  .chip { padding:4px 10px; border-radius:999px; background:#e3f2fd; color: #1976d2; font-weight:700; font-size: 11px; text-transform: uppercase; }
+
+  @keyframes uiPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    50% { transform: scale(1.02); box-shadow: 0 0 0 6px rgba(47,128,237,0.15); }
+    100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .approval-anim {
+    animation: fadeSlideIn 260ms ease-out;
+  }
+
+  .code-hint-pulse {
+    animation: uiPulse 900ms ease-in-out infinite;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="panel" style="margin-bottom:20px;">
+    <h2 style="margin-bottom:8px;">Delivery (Sender)</h2>
+    <p class="muted">Request a delivery. Track status in real-time (matched → accepted → roadside handover → paid).</p>
+  </div>
+
+  <div class="delivery-layout">
+    <div class="panel">
+      <h3 style="margin-bottom:14px;">Request Delivery</h3>
+
+      <div class="section-title"><i class="fas fa-map-marker-alt"></i> 1. Pickup Details</div>
+      <div class="field">
+        <label>Pickup Location</label>
+        <input id="pickup" placeholder="Address, landmark or city" value="{{ active_delivery.pickup_address if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Contact Person Name</label>
+        <input id="pickup_contact_name" placeholder="Name" value="{{ active_delivery.pickup_contact_name if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Phone Number</label>
+        <input id="pickup_contact_phone" placeholder="Phone" value="{{ active_delivery.pickup_contact_phone if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Special Instructions</label>
+        <textarea id="pickup_instructions" rows="2" placeholder="Gate code, floor, etc.">{{ active_delivery.pickup_instructions if active_delivery else '' }}</textarea>
+      </div>
+
+      <div class="section-title"><i class="fas fa-flag-checkered"></i> 2. Drop-off Details</div>
+      <div class="field">
+        <label>Delivery Location</label>
+        <input id="dropoff" placeholder="Address, landmark or city" value="{{ active_delivery.dropoff_address if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Recipient Name</label>
+        <input id="recipient_name" placeholder="Name" value="{{ active_delivery.recipient_name if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Recipient Phone</label>
+        <input id="recipient_phone" placeholder="Phone" value="{{ active_delivery.recipient_phone if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label for="recipient">Recipient System ID (Optional)</label>
+        <input id="recipient" placeholder="e.g., 2" value="{{ active_delivery.recipient_id if active_delivery else '' }}" />
+      </div>
+      <div class="field">
+        <label>Special Instructions</label>
+        <textarea id="dropoff_instructions" rows="2" placeholder="Fragile, leave at door, etc.">{{ active_delivery.dropoff_instructions if active_delivery else '' }}</textarea>
+      </div>
+
+      <div class="section-title"><i class="fas fa-box"></i> 3. Package Information</div>
+      <div class="field">
+        <label>Type of Item</label>
+        <select id="package_type" data-saved="{{ active_delivery.package_type if active_delivery else '' }}">
+          <option value="parcel">Parcel</option>
+          <option value="food">Food</option>
+          <option value="documents">Documents</option>
+          <option value="electronics">Electronics</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Size/Weight</label>
+        <select id="package_size" data-saved="{{ active_delivery.package_size if active_delivery else '' }}">
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+          <option value="heavy">Heavy</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Handling Requirements</label>
+        <input id="handling_requirements" placeholder="Temp control, urgent, etc." />
+      </div>
+
+      <div class="section-title"><i class="fas fa-clock"></i> 4. Timing</div>
+      <div class="field">
+        <label>Preferred Pickup Time</label>
+        <input id="preferred_pickup_time" placeholder="e.g. Asap, or 2 PM" />
+      </div>
+      <div class="field">
+        <label>Preferred Delivery Time</label>
+        <input id="preferred_delivery_time" placeholder="e.g. within 1 hour" />
+      </div>
+      <div class="field">
+        <label>Urgency Level</label>
+        <select id="urgency_level" data-saved="{{ active_delivery.urgency_level if active_delivery else '' }}">
+          <option value="standard">Standard</option>
+          <option value="express">Express</option>
+          <option value="scheduled">Scheduled</option>
+        </select>
+      </div>
+
+      <div class="section-title"><i class="fas fa-wallet"></i> 5. Payment</div>
+      <div class="field">
+        <label>Payment Method</label>
+        <select id="payment_method" data-saved="{{ active_delivery.payment_method if active_delivery else '' }}">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+          <option value="mobile_money">Mobile Money</option>
+          <option value="prepaid">Prepaid</option>
+        </select>
+      </div>
+
+      <div id="farePreview" class="details-card" style="display:none; margin-bottom: 15px;">
+        <h4>Estimated Fare</h4>
+        <div class="details-row"><span>Distance:</span><strong id="previewDist">-</strong></div>
+        <div class="details-row"><span>Fare:</span><strong id="previewPrice">-</strong></div>
+      </div>
+
+      <div class="btn-row">
+        <button id="geocodeBtn" class="btn btn-primary">Set Locations</button>
+        <button id="createBtn" class="btn btn-success">Request Delivery</button>
+      </div>
+
+      <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
+
+      <hr style="margin:18px 0;" />
+
+      <h3 style="margin-bottom:6px;">Status Timeline</h3>
+      <p class="muted" style="margin-top:0;">Updates are pushed to <b>your</b> user room: user:{sender_id}</p>
+      <div class="timeline" id="timeline"></div>
+
+      <div class="field" style="margin-top:14px;">
+        <label>Approval Code (send this to the recipient)</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="approvalCode" placeholder="Waiting for code..." disabled style="flex:1;" value="{{ active_delivery.approval_code if active_delivery else '' }}" />
+          <button id="copyCodeBtn" class="btn btn-primary" type="button" style="{% if active_delivery %}display:inline-flex;{% else %}display:none;{% endif %}">
+            Copy
+          </button>
+        </div>
+        <p class="muted approval-anim" style="margin-top:8px;" id="approvalCodeHint">{% if active_delivery %}Code ready. Share it with the recipient.{% else %}Waiting for approval code...{% endif %}</p>
+      </div>
+
+      <input type="hidden" id="deliveryId" value="{{ active_delivery.id if active_delivery else '' }}" />
+    </div>
+
+    <div>
+      <div id="map"></div>
+      <p class="muted" style="margin-top:10px;">Markers: Pickup (A), Dropoff (B), Rider (R)</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+  const socket = io();
+
+  // Map
+  const map = L.map('map').setView([5.6037, -0.1870], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let pickupLatLng = null;
+  let dropoffLatLng = null;
+
+  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  pickupMarker.bindTooltip('Pickup (A)');
+
+  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  dropoffMarker.bindTooltip('Dropoff (B)');
+
+  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  riderMarker.bindTooltip('Rider (R)');
+
+  let watchId = null;
+  let routePolyline = null;
+  let trackingPolyline = null;
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = 'Status: ' + msg;
+  }
+
+  function renderTimeline(payload) {
+    const el = document.getElementById('timeline');
+    if (!el) return;
+
+    const status = payload && payload.status ? payload.status : 'unknown';
+    el.innerHTML = '';
+
+    const rows = [
+      ['status', status],
+      ['matched_at', payload.matched_at || ''],
+      ['accepted_at', payload.accepted_at || ''],
+      ['arrived_at_pickup_at', payload.arrived_at_pickup_at || ''],
+      ['picked_up_at', payload.picked_up_at || ''],
+      ['arrived_at_dropoff_at', payload.arrived_at_dropoff_at || ''],
+      ['handover_confirmed_at', payload.handover_confirmed_at || ''],
+      ['paid_at', payload.paid_at || ''],
+    ];
+
+    for (const [k, v] of rows) {
+      const row = document.createElement('div');
+      row.className = v ? 'row' : 'row empty';
+      row.innerHTML = `<span>${k}</span><span>${v || '-'}</span>`;
+      el.appendChild(row);
+    }
+  }
+
+  function updateRoutePolyline() {
+    if (!pickupLatLng || !dropoffLatLng) return;
+    const now = Date.now();
+    if (!updateRoutePolyline.lastFetchTs) updateRoutePolyline.lastFetchTs = 0;
+    if (now - updateRoutePolyline.lastFetchTs < 60000) return;
+    updateRoutePolyline.lastFetchTs = now;
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return;
+        const coords = data.routes[0].geometry.coordinates;
+        const latlngs = coords.map(c => [c[1], c[0]]);
+
+        if (routePolyline) {
+          routePolyline.setLatLngs(latlngs);
+        } else {
+          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+        }
+      })
+      .catch(() => {});
+  }
+
+  async function geocode(query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('Geocode failed');
+    const data = await res.json();
+    if (!data || !data.length) throw new Error('No results');
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  }
+
+  document.getElementById('geocodeBtn').addEventListener('click', async () => {
+    try {
+      setStatus('Geocoding...');
+      const pickup = document.getElementById('pickup').value.trim();
+      const dropoff = document.getElementById('dropoff').value.trim();
+      if (!pickup || !dropoff) throw new Error('Enter pickup and dropoff');
+
+      const p = await geocode(pickup);
+      const d = await geocode(dropoff);
+
+      pickupLatLng = [p.lat, p.lon];
+      dropoffLatLng = [d.lat, d.lon];
+
+      pickupMarker.setLatLng(pickupLatLng);
+      dropoffMarker.setLatLng(dropoffLatLng);
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+      
+      // Bolt Pricing Preview: Replicate backend math (Base $2 + $1.50/km)
+      const distMeters = map.distance(L.latLng(p.lat, p.lon), L.latLng(d.lat, d.lon));
+      const distKm = distMeters / 1000;
+      const estimatedFare = 2.00 + (distKm * 1.50);
+      
+      document.getElementById('farePreview').style.display = 'block';
+      document.getElementById('previewDist').textContent = distKm.toFixed(2) + ' km';
+      document.getElementById('previewPrice').textContent = '₵' + estimatedFare.toFixed(2);
+      updateRoutePolyline();
+
+      setStatus('Locations set');
+    } catch (e) {
+      console.error(e);
+      setStatus('Error: ' + e.message);
+      alert(e.message);
+    }
+  });
+
+  document.getElementById('createBtn').addEventListener('click', async () => {
+    try {
+      const recipientId = document.getElementById('recipient').value.trim();
+      if (!pickupLatLng || !dropoffLatLng) throw new Error('Set locations first');
+
+      setStatus('Requesting delivery...');
+
+      const res = await fetch('/api/request_delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient_id: recipientId ? parseInt(recipientId, 10) : null,
+          pickup_lat: pickupLatLng[0],
+          pickup_lon: pickupLatLng[1],
+          dropoff_lat: dropoffLatLng[0],
+          dropoff_lon: dropoffLatLng[1],
+          pickup_address: document.getElementById('pickup').value,
+          pickup_contact_name: document.getElementById('pickup_contact_name').value,
+          pickup_contact_phone: document.getElementById('pickup_contact_phone').value,
+          pickup_instructions: document.getElementById('pickup_instructions').value,
+          dropoff_address: document.getElementById('dropoff').value,
+          recipient_name: document.getElementById('recipient_name').value,
+          recipient_phone: document.getElementById('recipient_phone').value,
+          dropoff_instructions: document.getElementById('dropoff_instructions').value,
+          package_type: document.getElementById('package_type').value,
+          package_size: document.getElementById('package_size').value,
+          handling_requirements: document.getElementById('handling_requirements').value,
+          preferred_pickup_time: document.getElementById('preferred_pickup_time').value,
+          preferred_delivery_time: document.getElementById('preferred_delivery_time').value,
+          urgency_level: document.getElementById('urgency_level').value,
+          payment_method: document.getElementById('payment_method').value
+        })
+      });
+
+      const contentType = res.headers.get("content-type");
+      let data = {};
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      }
+
+      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+
+      setStatus('Delivery created: #' + data.delivery_id);
+
+      document.getElementById('deliveryId').value = String(data.delivery_id);
+
+      // Show approval code so sender can share with recipient.
+      const codeEl = document.getElementById('approvalCode');
+      const copyBtn = document.getElementById('copyCodeBtn');
+      const hintEl = document.getElementById('approvalCodeHint');
+
+      if (codeEl) {
+        const code = data.approval_code ? String(data.approval_code) : '';
+        codeEl.value = code || '';
+        codeEl.placeholder = code ? '' : 'Waiting for code...';
+
+        if (code && copyBtn) {
+          copyBtn.style.display = 'inline-flex';
+        }
+        if (hintEl) {
+          hintEl.textContent = code ? 'Code ready. Share it with the recipient.' : 'Waiting for approval code...';
+          if (code) {
+            hintEl.classList.remove('code-hint-pulse');
+            hintEl.style.fontWeight = '800';
+          } else {
+            hintEl.classList.add('code-hint-pulse');
+            hintEl.style.fontWeight = '';
+          }
+        }
+      }
+
+      // Sender also joins tracking room to receive rider location updates.
+      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+    } catch (e) {
+      console.error(e);
+      setStatus('Error: ' + e.message);
+      alert(e.message);
+    }
+  });
+
+  socket.on('connect', () => {
+    setStatus('connected');
+  });
+
+  socket.on('delivery_initial', (payload) => {
+    if (payload && payload.pickup_lat != null) {
+      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+      pickupMarker.setLatLng(pickupLatLng);
+    }
+    if (payload && payload.dropoff_lat != null) {
+      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+      dropoffMarker.setLatLng(dropoffLatLng);
+    }
+    if (pickupLatLng && dropoffLatLng) {
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+    }
+    renderTimeline(payload);
+  });
+
+  socket.on('delivery_offer', (payload) => {
+    // Sender may not receive delivery_offer; it's primarily emitted to rider.
+    // Keep for debugging.
+    if (payload && payload.delivery_id) {
+      setStatus('Offer: delivery #' + payload.delivery_id + ' status=' + payload.status);
+    }
+  });
+
+  const copyBtn = document.getElementById('copyCodeBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const codeEl = document.getElementById('approvalCode');
+      const code = (codeEl && codeEl.value ? String(codeEl.value) : '').trim();
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code);
+        setStatus('Approval code copied: ' + code);
+      } catch (e) {
+        // Fallback: prompt
+        alert('Copy this code: ' + code);
+      }
+    });
+  }
+
+  socket.on('delivery_status_update', (payload) => {
+    if (!payload) return;
+    const currentDeliveryId = document.getElementById('deliveryId').value;
+    if (payload.delivery_id && currentDeliveryId && String(payload.delivery_id) !== String(currentDeliveryId)) {
+      return;
+    }
+
+    if (payload.delivery_id && !currentDeliveryId) {
+      document.getElementById('deliveryId').value = String(payload.delivery_id);
+      socket.emit('join_delivery', { delivery_id: payload.delivery_id });
+    }
+
+    setStatus('status updated: ' + (payload.status || 'unknown'));
+    renderTimeline(payload);
+  });
+
+  socket.on('rider_location_update', (payload) => {
+    if (!payload) return;
+    if (payload.lat == null || payload.lon == null) return;
+
+    const next = [payload.lat, payload.lon];
+    riderMarker.setLatLng(next);
+
+    if (pickupLatLng && dropoffLatLng) {
+      updateRoutePolyline();
+
+      if (!trackingPolyline) {
+        trackingPolyline = L.polyline([next], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+      } else {
+        const latlngs = trackingPolyline.getLatLngs();
+        const last = latlngs.length ? latlngs[latlngs.length - 1] : null;
+        const dist = last ? map.distance(L.latLng(last.lat, last.lng), L.latLng(next[0], next[1])) : Infinity;
+        if (dist < 8) return;
+        latlngs.push(L.latLng(next[0], next[1]));
+        trackingPolyline.setLatLngs(latlngs);
+      }
+    }
+  });
+
+  // Handle initialization on refresh
+  window.addEventListener('load', () => {
+    const dId = document.getElementById('deliveryId').value;
+    if (dId) {
+      socket.emit('join_delivery', { delivery_id: parseInt(dId, 10) });
+    }
+    document.querySelectorAll('select[data-saved]').forEach(sel => {
+      if (sel.dataset.saved) sel.value = sel.dataset.saved;
+    });
+  });
+</script>
+{% endblock %}

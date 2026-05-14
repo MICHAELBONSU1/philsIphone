@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Delivery (Recipient - by Sender ID) - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+  .delivery-layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .delivery-layout { grid-template-columns: 1fr; } }
+  .panel { background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); padding: 20px; }
+  .field { margin-bottom: 14px; }
+  .muted { color:#666; font-size: 14px; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+  #map { height: 520px; border-radius: 15px; }
+  .timeline { margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+  .timeline .row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px dashed #eee; }
+
+  @keyframes uiPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    50% { transform: scale(1.02); box-shadow: 0 0 0 6px rgba(47,128,237,0.15); }
+    100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+  }
+
+  .code-hint-pulse { animation: uiPulse 900ms ease-in-out infinite; }
+
+  @keyframes approvePop {
+    0% { transform: scale(0.96); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  .approve-pop {
+    animation: approvePop 320ms ease-out;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" data-user-id="{{ session.get('user_id', 0) }}">
+  <div class="panel" style="margin-bottom:20px;">
+    <h2 style="margin-bottom:8px;">Delivery (Recipient)</h2>
+    <p class="muted">Enter the <b>Sender ID</b> you were given. The app finds the active delivery and tracks live to drop-off.</p>
+  </div>
+
+  <div class="delivery-layout">
+    <div class="panel">
+      <h3 style="margin-bottom:6px;">Tracking Setup</h3>
+      <div class="field">
+        <label for="senderIdInput">Sender ID</label>
+        <input id="senderIdInput" placeholder="e.g., 1" />
+      </div>
+
+      <div class="btn-row">
+        <button id="lookupBtn" class="btn btn-primary">Lookup Delivery</button>
+        <button id="approveBtn" class="btn btn-success" style="display:none;">
+          <i class="fas fa-check"></i> Approve Delivery
+        </button>
+      </div>
+
+      <div class="field" style="margin-top:12px;">
+        <label class="muted">Active Delivery ID</label>
+        <input id="deliveryId" placeholder="Waiting..." disabled />
+      </div>
+
+      <div class="field" style="margin-top:12px;">
+        <label for="approvalCodeInput" class="muted">Approval Code (from sender)</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="approvalCodeInput" placeholder="Enter code" style="flex:1;" />
+          <button id="copyCodeBtn" class="btn btn-primary" type="button" style="display:none;">Copy</button>
+        </div>
+        <p class="muted" style="margin-top:8px;" id="approvalHint">Enter the code from the sender.</p>
+      </div>
+
+      <p class="muted" style="margin-top:10px;" id="status">Status: idle</p>
+
+      <hr style="margin:18px 0;" />
+
+      <h3 style="margin-bottom:6px;">Status Timeline</h3>
+      <div class="timeline" id="timeline"></div>
+
+      <p class="muted" style="margin-top:12px;">
+        Live rider GPS updates are streamed to you after joining the delivery room.
+      </p>
+    </div>
+
+    <div>
+      <div id="map"></div>
+      <p class="muted" style="margin-top:10px;">Markers: Pickup (A), Dropoff (B), Rider (R)</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+  const socket = io();
+
+  const map = L.map('map').setView([5.6037, -0.1870], 12);
+
+  socket.on('connect', () => {
+    const container = document.querySelector('.container[data-user-id]');
+    const userId = container ? Number(container.dataset.userId) : 0;
+    if (userId) socket.emit('join_user', { user_id: userId });
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let pickupLatLng = null;
+  let dropoffLatLng = null;
+
+  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  pickupMarker.bindTooltip('Pickup (A)');
+
+  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  dropoffMarker.bindTooltip('Dropoff (B)');
+
+  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
+  riderMarker.bindTooltip('Rider (R)');
+
+  let routePolyline = null;
+  let trackingPolyline = null;
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = 'Status: ' + msg;
+  }
+
+  function renderTimeline(payload) {
+    const el = document.getElementById('timeline');
+    if (!el) return;
+
+    const rows = [
+      ['status', payload && payload.status ? payload.status : 'unknown'],
+      ['matched_at', payload && payload.matched_at ? payload.matched_at : ''],
+      ['accepted_at', payload && payload.accepted_at ? payload.accepted_at : ''],
+      ['handover_confirmed_at', payload && payload.handover_confirmed_at ? payload.handover_confirmed_at : ''],
+      ['paid_at', payload && payload.paid_at ? payload.paid_at : ''],
+    ];
+
+    el.innerHTML = '';
+    for (const [k, v] of rows) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<span>${k}</span><span>${v || '-'}</span>`;
+      el.appendChild(row);
+    }
+  }
+
+  function updateRoutePolyline() {
+    if (!pickupLatLng || !dropoffLatLng) return;
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return;
+        const coords = data.routes[0].geometry.coordinates;
+        const latlngs = coords.map(c => [c[1], c[0]]);
+
+        if (routePolyline) {
+          routePolyline.setLatLngs(latlngs);
+        } else {
+          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+        }
+      })
+      .catch(() => {});
+  }
+
+  socket.on('connect', () => {
+    setStatus('connected');
+  });
+
+  socket.on('delivery_initial', (payload) => {
+    if (!payload) return;
+    if (payload.pickup_lat != null) {
+      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+      pickupMarker.setLatLng(pickupLatLng);
+    }
+    if (payload.dropoff_lat != null) {
+      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+      dropoffMarker.setLatLng(dropoffLatLng);
+    }
+    if (pickupLatLng && dropoffLatLng) {
+      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+      updateRoutePolyline();
+    }
+  });
+
+  socket.on('delivery_status_update', (payload) => {
+    if (!payload) return;
+    const deliveryIdInput = document.getElementById('deliveryId');
+    if (payload.delivery_id && deliveryIdInput.value && String(payload.delivery_id) !== String(deliveryIdInput.value)) return;
+
+    if (payload.delivery_id && !deliveryIdInput.value) {
+      deliveryIdInput.value = String(payload.delivery_id);
+      socket.emit('join_delivery', { delivery_id: payload.delivery_id });
+    }
+
+    setStatus('status updated: ' + (payload.status || 'unknown'));
+    renderTimeline(payload);
+
+    const approveBtn = document.getElementById('approveBtn');
+    if (payload.status === 'pending_recipient') {
+      approveBtn.style.display = 'inline-flex';
+      approveBtn.classList.remove('approve-pop');
+      // force reflow so animation restarts
+      void approveBtn.offsetWidth;
+      approveBtn.classList.add('approve-pop');
+    } else {
+      approveBtn.style.display = 'none';
+      approveBtn.classList.remove('approve-pop');
+    }
+  });
+
+  socket.on('rider_location_update', (payload) => {
+    if (!payload) return;
+    if (payload.lat == null || payload.lon == null) return;
+
+    const next = [payload.lat, payload.lon];
+    riderMarker.setLatLng(next);
+
+    if (pickupLatLng && dropoffLatLng) {
+      if (!trackingPolyline) {
+        trackingPolyline = L.polyline([next], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+      } else {
+        const latlngs = trackingPolyline.getLatLngs();
+        const last = latlngs.length ? latlngs[latlngs.length - 1] : null;
+        const dist = last ? map.distance(L.latLng(last.lat, last.lng), L.latLng(next[0], next[1])) : Infinity;
+        if (dist < 8) return;
+        latlngs.push(L.latLng(next[0], next[1]));
+        trackingPolyline.setLatLngs(latlngs);
+      }
+    }
+  });
+
+  function updateApprovalUi() {
+    const input = document.getElementById('approvalCodeInput');
+    const copyBtn = document.getElementById('copyCodeBtn');
+    const hint = document.getElementById('approvalHint');
+    if (!input) return;
+
+    const code = (input.value || '').trim();
+    if (copyBtn) copyBtn.style.display = code ? 'inline-flex' : 'none';
+
+    if (hint) {
+      hint.textContent = code ? 'Code entered. You can approve now.' : 'Enter the code from the sender.';
+      if (code) hint.classList.remove('code-hint-pulse');
+      else hint.classList.add('code-hint-pulse');
+    }
+  }
+
+  document.getElementById('approvalCodeInput')?.addEventListener('input', updateApprovalUi);
+
+  document.getElementById('copyCodeBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('approvalCodeInput');
+    const code = (input && input.value ? String(input.value) : '').trim();
+    if (!code) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setStatus('Code copied.');
+    } catch (e) {
+      alert('Copy this code: ' + code);
+    }
+  });
+
+  updateApprovalUi();
+  const hintEl = document.getElementById('approvalHint');
+  if (hintEl) hintEl.classList.add('code-hint-pulse');
+
+  document.getElementById('lookupBtn').addEventListener('click', async () => {
+    try {
+      const senderId = document.getElementById('senderIdInput').value.trim();
+      if (!senderId) throw new Error('Enter Sender ID');
+
+      setStatus('looking up delivery...');
+
+      const res = await fetch('/api/recipient_lookup_delivery_by_sender', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender_id: parseInt(senderId, 10) })
+      });
+
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(data.error || 'Lookup failed');
+
+      if (!data.delivery_id) throw new Error('No active delivery found');
+
+      document.getElementById('deliveryId').value = String(data.delivery_id);
+      setStatus('joining delivery #' + data.delivery_id);
+
+      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+
+      // Until a status update arrives, keep approve hidden.
+      document.getElementById('approveBtn').style.display = 'none';
+    } catch (e) {
+      console.error(e);
+      alert(e.message);
+      setStatus('error: ' + e.message);
+    }
+  });
+
+  document.getElementById('approveBtn').addEventListener('click', async () => {
+    const deliveryId = document.getElementById('deliveryId').value;
+    if (!deliveryId) return;
+
+    try {
+      const approvalCode = (document.getElementById('approvalCodeInput').value || '').trim();
+
+      const res = await fetch('/api/recipient_approve_delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_id: parseInt(deliveryId, 10), approval_code: approvalCode }),
+      });
+
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(data.error || 'Approval failed');
+
+      setStatus('Approved. Waiting for rider.');
+      document.getElementById('approveBtn').style.display = 'none';
+    } catch (e) {
+      alert(e.message);
+      console.error(e);
+    }
+  });
+</script>
+{% endblock %}

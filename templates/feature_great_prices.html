@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Great Prices - Phil's iPhone{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Great Prices</h2>
+            <p>Quality devices at better value.</p>
+        </div>
+
+        <div class="why-grid" style="margin-top: 20px;">
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-tags"></i></div>
+                <h3>Better Value</h3>
+                <p>Competitive pricing across phones and laptops.</p>
+            </div>
+            <div class="why-tile">
+                <div class="why-icon"><i class="fas fa-balance-scale"></i></div>
+                <h3>Fair Deals</h3>
+                <p>We keep listings clear so you can compare easily.</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Home</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+

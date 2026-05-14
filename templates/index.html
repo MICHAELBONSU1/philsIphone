@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}Phil's iPhone - Home{% endblock %}
+
+{% block content %}
+
+
+<div class="container">
+
+
+
+    <div class="hero" style="background-image: url('{{ url_for('static', filename='images/hello.jpg') }}'); background-size: cover; background-position: center; background-color: rgba(0,0,0,0.4);">
+        <h1 style="color: white !important; text-shadow: 2px 2px 8px rgba(0,0,0,0.9);">Welcome to Phil's iPhone</h1>
+        <p style="color: white !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Find the best phones and laptops at great prices!</p>
+    </div>
+
+    
+
+    <div class="filter-section">
+        <div class="filter-buttons">
+            <a href="{{ url_for('index') }}" class="filter-btn {% if not category %}active{% endif %}">All</a>
+            <a href="{{ url_for('index') }}?category=phones" class="filter-btn {% if category == 'phones' %}active{% endif %}">Phones</a>
+            <a href="{{ url_for('index') }}?category=laptops" class="filter-btn {% if category == 'laptops' %}active{% endif %}">Laptops</a>
+            <a href="{{ url_for('index') }}?category=other" class="filter-btn {% if category == 'other' %}active{% endif %}">Other</a>
+        </div>
+
+    </div>
+
+
+    <!-- Featured Deals -->
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Featured Deals</h2>
+            <p>Quick picks to get you the best value fast.</p>
+        </div>
+
+        <div class="featured-row">
+            <a class="featured-card" href="{{ url_for('index') }}?category=phones">
+                <img class="featured-card-img" src="{{ url_for('static', filename='images/Iphone XR.jpg') }}" alt="Best Value iPhones">
+                <div class="featured-card-overlay">
+                    <div class="featured-card-title">Best Value</div>
+                    <div class="featured-card-sub">Great deals on phones</div>
+                </div>
+            </a>
+
+            <a class="featured-card" href="{{ url_for('index') }}?category=phones">
+                <img class="featured-card-img" src="{{ url_for('static', filename='images/13pro.jpg') }}" alt="Latest iPhones">
+                <div class="featured-card-overlay">
+                    <div class="featured-card-title">Latest iPhones</div>
+                    <div class="featured-card-sub">New arrivals daily</div>
+                </div>
+            </a>
+
+            <a class="featured-card" href="{{ url_for('index') }}?category=phones">
+                <img class="featured-card-img" src="{{ url_for('static', filename='images/17pro.jpg') }}" alt="Pro Models">
+                <div class="featured-card-overlay">
+                    <div class="featured-card-title">Pro Picks</div>
+                    <div class="featured-card-sub">Performance-focused models</div>
+                </div>
+            </a>
+
+            <a class="featured-card" href="{{ url_for('index') }}?category=laptops">
+                <img class="featured-card-img" src="{{ url_for('static', filename='images/14.jpg') }}" alt="Budget Laptops">
+                <div class="featured-card-overlay">
+                    <div class="featured-card-title">Budget Laptops</div>
+                    <div class="featured-card-sub">Study & work ready</div>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <!-- Why Buy -->
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Why Buy From Phil's iPhone</h2>
+            <p>Simple buying, clear listings, and fast support.</p>
+        </div>
+
+    <div class="why-grid">
+            <a class="why-tile" href="{{ url_for('fast_delivery') }}">
+
+                <div class="why-icon"><i class="fas fa-shipping-fast"></i></div>
+                <h3>Fast Delivery</h3>
+                <p>Quick processing and smooth handoff.</p>
+            </a>
+            <a class="why-tile" href="{{ url_for('verified_listings') }}">
+                <div class="why-icon"><i class="fas fa-shield-alt"></i></div>
+                <h3>Verified Listings</h3>
+                <p>Detailed photos and clear condition info.</p>
+            </a>
+            <a class="why-tile" href="{{ url_for('great_prices') }}">
+                <div class="why-icon"><i class="fas fa-tags"></i></div>
+                <h3>Great Prices</h3>
+                <p>Quality devices at better value.</p>
+            </a>
+            <a class="why-tile" href="{{ url_for('easy_returns') }}">
+                <div class="why-icon"><i class="fas fa-hand-holding-heart"></i></div>
+                <h3>Easy Returns</h3>
+                <p>Support when you need it.</p>
+            </a>
+<a class="why-tile" href="{{ url_for('repairs_home') }}">
+                <div class="why-icon"><i class="fas fa-wrench"></i></div>
+                <h3>Repairs</h3>
+                <p>Request repairs from assigned account.</p>
+            </a>
+
+        </div>
+    </section>
+
+    <!-- Shop by Type -->
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Shop by Type</h2>
+            <p>Tap a card to filter the products below.</p>
+        </div>
+
+        <div class="type-chips">
+            <a class="type-chip" href="{{ url_for('index') }}?category=phones"><i class="fas fa-mobile-alt"></i><span>Phones</span></a>
+            <a class="type-chip" href="{{ url_for('index') }}?category=laptops"><i class="fas fa-laptop"></i><span>Laptops</span></a>
+            <a class="type-chip" href="{{ url_for('index') }}?category=other"><i class="fas fa-layer-group"></i><span>Other</span></a>
+        </div>
+    </section>
+
+    <div class="items-grid" id="items-grid">
+        <div class="iphone-shuffles-horizontal fade-in">
+            <!-- Carousel 1: Latest iPhones -->
+            <div class="iphone-shuffle">
+                <h2 style="text-align: center; margin-bottom: 30px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Latest iPhones</h2>
+                <div class="shuffle-container" id="iphoneShuffle1">
+                    <img src="{{ url_for('static', filename='images/Iphone XR.jpg') }}" alt="iPhone XR" class="shuffle-img active">
+                    <img src="{{ url_for('static', filename='images/iphone 12.jpg') }}" alt="iPhone 12" class="shuffle-img">
+                    <img src="{{ url_for('static', filename='images/12.1.jpg') }}" alt="iPhone 12" class="shuffle-img">
+                </div>
+            </div>
+            
+            <!-- Carousel 2: Pro Models -->
+            <div class="iphone-shuffle">
+                <h2 style="text-align: center; margin-bottom: 30px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Pro Models</h2>
+                <div class="shuffle-container" id="iphoneShuffle2">
+                    <img src="{{ url_for('static', filename='images/13pro.jpg') }}" alt="iPhone 13 Pro" class="shuffle-img active">
+                    <img src="{{ url_for('static', filename='images/17pro.jpg') }}" alt="iPhone 17 Pro" class="shuffle-img">
+                    <img src="{{ url_for('static', filename='images/14.jpg') }}" alt="iPhone 14 Pro" class="shuffle-img">
+                </div>
+            </div>
+            
+            <!-- Carousel 3: New Arrivals -->
+            <div class="iphone-shuffle">
+                <h2 style="text-align: center; margin-bottom: 30px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">New Arrivals</h2>
+                <div class="shuffle-container" id="iphoneShuffle3">
+                    <img src="{{ url_for('static', filename='images/15.jpg') }}" alt="iPhone 15" class="shuffle-img active">
+                    <img src="{{ url_for('static', filename='images/16.jpg') }}" alt="iPhone 16" class="shuffle-img">
+                    <img src="{{ url_for('static', filename='images/iphone 12.jpg') }}" alt="iPhone 12" class="shuffle-img">
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing items grid -->
+        <div class="items-grid dynamic-items" id="dynamicItems">
+            {% if items %}
+                {% for item in items %}
+                <div class="item-card fade-in">
+                    <div class="item-image">
+                        {% if item.image_url %}
+                        <img src="{{ url_for('uploaded_file', filename=item.image_url) }}" alt="{{ item.title }}" loading="lazy" decoding="async" onerror="this.style.display='none';">
+                        {% else %}
+                        <i class="fas {% if item.category == 'phones' %}fa-mobile-alt{% else %}fa-laptop{% endif %}"></i>
+                        {% endif %}
+                    </div>
+                    <div class="item-info">
+                        <h3>{{ item.title }}</h3>
+                        <p class="item-price">₵{{ "%.2f"|format(item.price) }}</p>
+                        <p class="item-condition">
+                            <span class="badge badge-{{ item.condition }}">{{ item.condition.replace('-', ' ').title() }}</span>
+                        </p>
+                        <p class="item-seller">By: {{ item.seller.username }}</p>
+                        <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-primary">View Details</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+    // iPhone shuffle carousels
+    function initCarousel(containerId) {
+        const shuffleImgs = document.querySelectorAll('#' + containerId + ' .shuffle-img');
+        let currentImg = 0;
+        
+        function shuffleNext() {
+            shuffleImgs[currentImg].classList.remove('active');
+            currentImg = (currentImg + 1) % shuffleImgs.length;
+            shuffleImgs[currentImg].classList.add('active');
+        }
+        
+        setInterval(shuffleNext, 4000);
+    }
+    
+    // Initialize all 3 horizontal carousels
+    initCarousel('iphoneShuffle1');
+    initCarousel('iphoneShuffle2');
+    initCarousel('iphoneShuffle3');
+    
+    // Skeleton removal for dynamic items
+    setTimeout(() => {
+        const skeletons = document.querySelectorAll('.skeleton');
+        skeletons.forEach(s => s.remove());
+    }, 1000);
+    </script>
+</div>
+{% endblock %}

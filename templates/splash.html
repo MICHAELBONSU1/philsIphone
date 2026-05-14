@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phil's iPhone - Loading...</title>
+<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .splash-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+.welcome-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 50;
+            animation: fadeIn 1s ease-in;
+        }
+        .welcome-text h1 {
+            color: white;
+            font-size: 72px;
+            font-weight: bold;
+            text-shadow: 4px 4px 15px rgba(0, 0, 0, 0.9);
+            margin-bottom: 15px;
+        }
+        .welcome-text p {
+            color: #ffd700;
+            font-size: 42px;
+            font-weight: 700;
+            text-shadow: 3px 3px 12px rgba(0, 0, 0, 0.9);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -40%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        .skip-btn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            padding: 12px 25px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        .skip-btn:hover {
+            background: white;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="splash-container">
+        <video id="splash-video" autoplay muted playsinline>
+            <source src="{{ url_for('static', filename='videos/11.mp4') }}" type="video/mp4">
+        </video>
+        <div class="welcome-text">
+            <h1>Welcome to PHIL'S IPHONE</h1>
+            
+        </div>
+        <button class="skip-btn" onclick="skipSplash()">Skip >></button>
+    </div>
+
+    <script>
+        const video = document.getElementById('splash-video');
+        
+        function skipSplash() {
+            window.location.href = "{{ url_for('index') }}";
+        }
+        
+        // When video ends, redirect to main page
+        video.addEventListener('ended', function() {
+            window.location.href = "{{ url_for('index') }}";
+        });
+        
+        // Also skip on click anywhere
+        document.addEventListener('click', function() {
+            if (!event.target.classList.contains('skip-btn')) {
+                skipSplash();
+            }
+        });
+    </script>
+</body>
+</html>
