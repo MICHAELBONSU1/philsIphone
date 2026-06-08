@@ -1,7 +1,5 @@
 {% extends "base.html" %}
 
-{% block title %}Delivery (Sender) - Phil's iPhone{% endblock %}
-
 {% block extra_css %}
 <style>
   .delivery-layout { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
@@ -44,14 +42,36 @@
   .code-hint-pulse {
     animation: uiPulse 900ms ease-in-out infinite;
   }
+
+  .delivery-banner {
+    margin: 16px 0;
+    padding: 18px 20px;
+    border-radius: 14px;
+    background: #eaf9ff;
+    color: #0f4c75;
+    border: 1px solid #8ab6d6;
+    text-align: center;
+    font-weight: 700;
+    box-shadow: 0 3px 12px rgba(15, 76, 117, 0.08);
+  }
+
+  /* Chat Styles */
+  #delivery-chat-box { scroll-behavior: smooth; display: flex; flex-direction: column; }
+  .msg-bubble { padding: 8px 12px; border-radius: 15px; max-width: 80%; margin-bottom: 10px; position: relative; font-size: 0.9rem; }
+  .msg-sent { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .msg-received { background: #ffffff; align-self: flex-start; border-bottom-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .msg-meta { font-size: 0.65rem; opacity: 0.6; display: block; margin-top: 4px; text-align: right; }
+  .msg-sender { font-weight: bold; font-size: 0.7rem; margin-bottom: 2px; display: block; color: #555; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-  <div class="panel" style="margin-bottom:20px;">
+<div class="container" data-user-id="{{ session['user_id'] }}">
+
+
     <h2 style="margin-bottom:8px;">Delivery (Sender)</h2>
     <p class="muted">Request a delivery. Track status in real-time (matched → accepted → roadside handover → paid).</p>
+    <div id="deliveryBanner" class="delivery-banner" style="display:none;">Ride us with START — your delivery is live and being tracked.</div>
   </div>
 
   <div class="delivery-layout">
@@ -163,22 +183,59 @@
       </div>
 
       <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
+      <button id="downloadReceiptBtn" class="btn btn-info" type="button" disabled style="display:none; margin-top:10px;">Download Receipt</button>
+
+      <div class="delivery-widgets">
+        <div class="eta-widget">
+          <div class="eta-title"><i class="fas fa-clock"></i> ETA (GPS)</div>
+          <div class="eta-value" id="etaValue">—</div>
+          <div class="eta-sub" id="etaSub">Waiting for rider GPS...</div>
+        </div>
+
+        <div class="notifications-center">
+          <div class="notif-header">
+            <div class="notif-title"><i class="fas fa-bell"></i> Notifications Center</div>
+            <div class="notif-count" id="notifCount">0</div>
+          </div>
+          <div class="notif-list" id="notifList">
+            <div class="notif-empty">No updates yet.</div>
+          </div>
+        </div>
+      </div>
 
       <hr style="margin:18px 0;" />
+
+      <!-- 3-Party Chat UI -->
+      <div id="delivery-chat-card" class="card shadow-sm mb-4" style="display:none; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: white;">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
+            <h6 class="mb-0" style="color:white;"><i class="fas fa-comments me-2"></i>Delivery Chat (3-Party)</h6>
+            <span id="chat-lock-badge" class="badge bg-warning text-dark">Locked</span>
+        </div>
+        <div id="delivery-chat-box" class="card-body" style="height: 250px; overflow-y: auto; background: #e5ddd5; padding: 15px;">
+            <!-- Messages appear here -->
+        </div>
+        <div class="card-footer bg-light p-2">
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="chat-msg-input" class="form-control" style="flex: 1; border-radius: 20px; padding: 8px 15px;" placeholder="Wait for rider to accept..." disabled>
+                <button id="chat-send-btn" class="btn btn-primary" style="border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" disabled><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+      </div>
 
       <h3 style="margin-bottom:6px;">Status Timeline</h3>
       <p class="muted" style="margin-top:0;">Updates are pushed to <b>your</b> user room: user:{sender_id}</p>
       <div class="timeline" id="timeline"></div>
 
       <div class="field" style="margin-top:14px;">
+
         <label>Approval Code (send this to the recipient)</label>
         <div style="display:flex; gap:10px; align-items:center;">
           <input id="approvalCode" placeholder="Waiting for code..." disabled style="flex:1;" value="{{ active_delivery.approval_code if active_delivery else '' }}" />
-          <button id="copyCodeBtn" class="btn btn-primary" type="button" style="{% if active_delivery %}display:inline-flex;{% else %}display:none;{% endif %}">
-            Copy
+          <button id="copyCodeBtn" class="btn btn-primary" type="button" style="flex:none;display:none;">
+            <i class="fas fa-copy"></i> Copy
           </button>
         </div>
-        <p class="muted approval-anim" style="margin-top:8px;" id="approvalCodeHint">{% if active_delivery %}Code ready. Share it with the recipient.{% else %}Waiting for approval code...{% endif %}</p>
+        <p class="muted approval-anim" style="margin-top:8px;" id="approvalCodeHint">Loading…</p>
       </div>
 
       <input type="hidden" id="deliveryId" value="{{ active_delivery.id if active_delivery else '' }}" />
@@ -195,36 +252,233 @@
 {% block extra_js %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-<script>
-  const socket = io();
+   <script>
+      window.addEventListener('DOMContentLoaded', () => {
+      // Use the globalSocket from base.html (may be null if io() is unavailable)
+     var _gs = window.globalSocket || (window.io ? window.io({ path: '/socket.io', transports: ['polling', 'websocket'] }) : null);
+      var socket = _gs;
+      if (!socket) { console.warn('[delivery_sender] socket.io unavailable'); }
 
-  // Map
-  const map = L.map('map').setView([5.6037, -0.1870], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+    const deliveryIdEl = document.getElementById('deliveryId');
+    const senderUserId = Number(document.querySelector('.container')?.dataset.userId || 0);
 
-  let pickupLatLng = null;
-  let dropoffLatLng = null;
+    function ensureJoinDelivery() {
+      if (!deliveryIdEl) return;
+      const deliveryId = parseInt(deliveryIdEl.value, 10);
+      if (Number.isFinite(deliveryId) && deliveryId > 0) {
+        socket && socket.emit('join_delivery', { delivery_id: deliveryId });
+      }
+      if (senderUserId > 0) {
+        socket && socket.emit('join_user', { user_id: senderUserId });
+      }
+    }
 
-  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  pickupMarker.bindTooltip('Pickup (A)');
+   // Update the copy button + hint from the approval-code input, or from an explicit value
+   function _updateSenderCopyCodeUi(forcedCode) {
+      var codeEl  = document.getElementById('approvalCode');
+      var copyBtn = document.getElementById('copyCodeBtn');
+      var hintEl  = document.getElementById('approvalCodeHint');
+      if (!codeEl || !copyBtn || !hintEl) return;
 
-  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  dropoffMarker.bindTooltip('Dropoff (B)');
+      // Normalise undefined → null so the read-from-DOM fallback fires on no-arg calls
+      if (forcedCode === undefined) forcedCode = null;
 
-  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  riderMarker.bindTooltip('Rider (R)');
+      var code = (forcedCode != null)
+       ? String(forcedCode)
+       : (codeEl.value || '').trim();
 
-  let watchId = null;
-  let routePolyline = null;
-  let trackingPolyline = null;
+     var hasCode = !!code;
 
-  function setStatus(msg) {
+     if (hasCode) {
+       copyBtn.style.display = 'inline-flex';
+       hintEl.textContent = 'Code ready. Share it with the recipient.';
+       hintEl.classList.remove('code-hint-pulse');
+       hintEl.style.fontWeight = '800';
+     } else {
+       copyBtn.style.display = 'none';
+       hintEl.textContent = 'Waiting for delivery approval code...';
+       hintEl.classList.add('code-hint-pulse');
+       hintEl.style.fontWeight = '';
+    }
+   }
+
+   // --- 3-Party Delivery Chat Logic ---
+   let chatInitialized = false;
+   function initDeliveryChat(deliveryId, status) {
+      if (!deliveryId) return;
+      const card = document.getElementById('delivery-chat-card');
+      const input = document.getElementById('chat-msg-input');
+      const btn = document.getElementById('chat-send-btn');
+      const badge = document.getElementById('chat-lock-badge');
+
+      card.style.display = 'block';
+      
+      const unlockedStatuses = ['accepted', 'arrived_at_pickup', 'picked_up', 'en_route', 'arrived_at_dropoff', 'roadside_handover', 'paid'];
+      const isUnlocked = unlockedStatuses.includes(status);
+
+      if (isUnlocked) {
+         input.disabled = false;
+         btn.disabled = false;
+         input.placeholder = "Message rider & recipient...";
+         badge.innerText = "Active";
+         badge.className = "badge bg-success text-white";
+         
+         if (!chatInitialized) {
+            loadChatHistory(deliveryId);
+            chatInitialized = true;
+         }
+      } else {
+         input.disabled = true;
+         btn.disabled = true;
+         input.placeholder = "Locked until rider accepts...";
+         badge.innerText = "Locked";
+         badge.className = "badge bg-warning text-dark";
+      }
+   }
+
+   async function loadChatHistory(deliveryId) {
+      try {
+         const resp = await fetch(`/api/delivery_messages/${deliveryId}`);
+         const msgs = await resp.json();
+         const box = document.getElementById('delivery-chat-box');
+         box.innerHTML = '';
+         msgs.forEach(appendDeliveryMessage);
+      } catch (e) { console.error("Chat history load failed", e); }
+   }
+
+   function appendDeliveryMessage(msg) {
+      const box = document.getElementById('delivery-chat-box');
+      const isMe = Number(msg.sender_id) === senderUserId;
+      
+      const div = document.createElement('div');
+      div.className = `msg-bubble ${isMe ? 'msg-sent' : 'msg-received'}`;
+      div.innerHTML = `
+         <span class="msg-sender">${isMe ? 'You' : msg.sender_username}</span>
+         <span class="msg-text">${msg.content}</span>
+         <span class="msg-meta">${msg.created_at}</span>
+      `;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+   }
+
+   document.getElementById('chat-send-btn').onclick = async () => {
+      const input = document.getElementById('chat-msg-input');
+      const content = input.value.trim();
+      const dId = document.getElementById('deliveryId').value;
+      if (!content || !dId) return;
+
+      const resp = await fetch('/api/delivery_messages/send', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ delivery_id: dId, content: content })
+      });
+      if (resp.ok) input.value = '';
+   };
+
+   socket && socket.on('delivery_new_message', (data) => {
+      const dId = document.getElementById('deliveryId').value;
+      if (data.delivery_id == dId) appendDeliveryMessage(data);
+   });
+
+   let watchId = null;
+   let pickupLatLng = null;
+   let dropoffLatLng = null;
+   // Ensure these are defined before any click/Socket handlers
+   let routePolyline = null;
+   let trackingPolyline = null;
+
+  // Tile server fallback: if OpenStreetMap tiles don't load, switch to CartoDB Positron.
+  function createTileLayer() {
+    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+  }
+
+  const CartoDB_Positron = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 20,
+  });
+
+  const tileLayer = createTileLayer();
+
+   // Initialize map first so tile-error fallback cannot crash before `map` exists.
+   const map = L.map('map').setView([5.6037, -0.1870], 12);
+   tileLayer.addTo(map);
+
+  tileLayer.on('tileerror', function () {
+    try {
+      if (tileLayer._url && tileLayer._url.includes('openstreetmap.org')) {
+        console.warn('OSM tiles unavailable — switching to CartoDB Positron.');
+        map.removeLayer(tileLayer);
+        map.addLayer(CartoDB_Positron);
+      }
+    } catch (e) {
+      // Keep UI functional even if fallback cannot run.
+      console.warn('Tile fallback failed:', e);
+    }
+  });
+
+   const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
+   pickupMarker.bindTooltip('Pickup (A)');
+
+   const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
+   dropoffMarker.bindTooltip('Dropoff (B)');
+
+   const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
+   riderMarker.bindTooltip('Rider (R)');
+
+   function setStatus(msg) {
     document.getElementById('status').textContent = 'Status: ' + msg;
+  }
+
+  function updateDownloadReceiptButton(deliveryId, status) {
+    const btn = document.getElementById('downloadReceiptBtn');
+    if (!btn) return;
+    if (deliveryId && ['paid', 'roadside_handover'].includes(status)) {
+      btn.dataset.deliveryId = deliveryId;
+      btn.disabled = false;
+      btn.style.display = 'inline-flex';
+    } else if (deliveryId) {
+      btn.dataset.deliveryId = deliveryId;
+      btn.disabled = true;
+      btn.style.display = 'inline-flex';
+    } else {
+      btn.removeAttribute('data-delivery-id');
+      btn.disabled = true;
+      btn.style.display = 'none';
+    }
+  }
+
+  function downloadReceipt() {
+    const btn = document.getElementById('downloadReceiptBtn');
+    if (!btn || !btn.dataset.deliveryId) return;
+    window.location.href = `/delivery/${btn.dataset.deliveryId}/receipt/download`;
+  }
+
+  function showDeliveryBanner(text) {
+    const banner = document.getElementById('deliveryBanner');
+    if (!banner) return;
+    banner.textContent = text;
+    banner.style.display = 'block';
+  }
+
+  function hideDeliveryBanner() {
+    const banner = document.getElementById('deliveryBanner');
+    if (!banner) return;
+    banner.style.display = 'none';
+  }
+
+  function updateDeliveryBanner(payload) {
+    if (!payload) return;
+    if (payload.status === 'paid') {
+      showDeliveryBanner('Right us with START — delivery is complete!');
+    } else if (['accepted', 'arrived_at_pickup', 'picked_up', 'en_route', 'roadside_handover'].includes(payload.status)) {
+      showDeliveryBanner('Ride us with START — your rider is on the move.');
+    } else {
+      hideDeliveryBanner();
+    }
   }
 
   function renderTimeline(payload) {
@@ -260,7 +514,7 @@
     if (now - updateRoutePolyline.lastFetchTs < 60000) return;
     updateRoutePolyline.lastFetchTs = now;
 
-    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
+    const url = `/api/route?src_lat=${pickupLatLng[0]}&src_lon=${pickupLatLng[1]}&dst_lat=${dropoffLatLng[0]}&dst_lon=${dropoffLatLng[1]}`;
     fetch(url)
       .then(res => res.json())
       .then(data => {
@@ -277,49 +531,103 @@
       .catch(() => {});
   }
 
-  async function geocode(query) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('Geocode failed');
-    const data = await res.json();
-    if (!data || !data.length) throw new Error('No results');
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  }
-
-  document.getElementById('geocodeBtn').addEventListener('click', async () => {
-    try {
-      setStatus('Geocoding...');
-      const pickup = document.getElementById('pickup').value.trim();
-      const dropoff = document.getElementById('dropoff').value.trim();
-      if (!pickup || !dropoff) throw new Error('Enter pickup and dropoff');
-
-      const p = await geocode(pickup);
-      const d = await geocode(dropoff);
-
-      pickupLatLng = [p.lat, p.lon];
-      dropoffLatLng = [d.lat, d.lon];
-
-      pickupMarker.setLatLng(pickupLatLng);
-      dropoffMarker.setLatLng(dropoffLatLng);
-      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
-      
-      // Bolt Pricing Preview: Replicate backend math (Base $2 + $1.50/km)
-      const distMeters = map.distance(L.latLng(p.lat, p.lon), L.latLng(d.lat, d.lon));
-      const distKm = distMeters / 1000;
-      const estimatedFare = 2.00 + (distKm * 1.50);
-      
-      document.getElementById('farePreview').style.display = 'block';
-      document.getElementById('previewDist').textContent = distKm.toFixed(2) + ' km';
-      document.getElementById('previewPrice').textContent = '₵' + estimatedFare.toFixed(2);
-      updateRoutePolyline();
-
-      setStatus('Locations set');
-    } catch (e) {
-      console.error(e);
-      setStatus('Error: ' + e.message);
-      alert(e.message);
+    async function geocode(query) {
+        const params = new URLSearchParams({ q: query.trim() });
+        let lastError = null;
+        
+        // Retry up to 2 times with a 1-second delay
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const res = await fetch('/api/geocode?' + params.toString());
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    lastError = new Error(data.error || 'Geocoding service unavailable');
+                    
+                    // Don't retry on 404 (not found) or 400 (bad request)
+                    if (res.status === 404 || res.status === 400) {
+                        throw lastError;
+                    }
+                    
+                    // If this is the last attempt, throw the error
+                    if (attempt === 2) {
+                        throw lastError;
+                    }
+                    
+                    // Wait before retrying
+                    console.log(`Geocoding retry ${attempt}/2 for "${query}"...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
+                const data = await res.json();
+                return { lat: data.lat, lon: data.lon, display_name: data.display_name };
+            } catch (err) {
+                lastError = err;
+                if (attempt === 2) {
+                    throw lastError;
+                }
+                console.log(`Geocoding retry ${attempt}/2 for "${query}" after error:`, err.message);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        
+        throw lastError;
     }
-  });
+
+   document.getElementById('geocodeBtn').addEventListener('click', async () => {
+     try {
+       setStatus('Geocoding...');
+       const pickup = document.getElementById('pickup').value.trim();
+       const dropoff = document.getElementById('dropoff').value.trim();
+       if (!pickup || !dropoff) throw new Error('Enter pickup and dropoff');
+
+       console.log('Geocoding pickup:', pickup);
+       console.log('Geocoding dropoff:', dropoff);
+
+       const p = await geocode(pickup);
+       const d = await geocode(dropoff);
+
+       console.log('Pickup coordinates:', p);
+       console.log('Dropoff coordinates:', d);
+
+       pickupLatLng = [p.lat, p.lon];
+       dropoffLatLng = [d.lat, d.lon];
+
+       pickupMarker.setLatLng(pickupLatLng);
+       dropoffMarker.setLatLng(dropoffLatLng);
+       map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
+       
+       // Bolt Pricing Preview: replicate backend piecewise rules
+       const distMeters = map.distance(L.latLng(p.lat, p.lon), L.latLng(d.lat, d.lon));
+       const distKm = distMeters / 1000;
+
+       const baseFare = 2.00;
+       let rate = 0;
+       if (distKm <= 1.5) {
+         rate = 30.0;
+       } else if (distKm <= 4.0) {
+         rate = 20.0;
+       } else if (distKm >= 5.0) {
+         rate = 10.0;
+       } else {
+         // 4 to <5km: use middle policy (40.0)
+         rate = 20.0;
+       }
+
+       const estimatedFare = baseFare + (distKm * rate);
+
+       document.getElementById('farePreview').style.display = 'block';
+       document.getElementById('previewDist').textContent = distKm.toFixed(2) + ' km';
+       document.getElementById('previewPrice').textContent = '₵' + estimatedFare.toFixed(2);
+       updateRoutePolyline();
+
+
+       setStatus('Locations set');
+     } catch (e) {
+       console.error('Geocoding error:', e);
+       setStatus('Error: ' + e.message);
+       alert('Location error: ' + e.message + '\n\nPlease try:\n1. More specific addresses\n2. Check your internet connection\n3. Use landmark names if available');
+     }
+   });
 
   document.getElementById('createBtn').addEventListener('click', async () => {
     try {
@@ -366,34 +674,19 @@
       setStatus('Delivery created: #' + data.delivery_id);
 
       document.getElementById('deliveryId').value = String(data.delivery_id);
+      updateDownloadReceiptButton(data.delivery_id, data.status || 'requested');
 
-      // Show approval code so sender can share with recipient.
-      const codeEl = document.getElementById('approvalCode');
-      const copyBtn = document.getElementById('copyCodeBtn');
-      const hintEl = document.getElementById('approvalCodeHint');
+       // Show approval code so sender can share with recipient.
+       const codeEl = document.getElementById('approvalCode');
+       if (codeEl) {
+         const code = data.approval_code ? String(data.approval_code) : '';
+         codeEl.value = code || '';
+         codeEl.placeholder = code ? '' : 'Waiting for code...';
+       }
+       _updateSenderCopyCodeUi(data.approval_code || (codeEl && codeEl.value) || '');
 
-      if (codeEl) {
-        const code = data.approval_code ? String(data.approval_code) : '';
-        codeEl.value = code || '';
-        codeEl.placeholder = code ? '' : 'Waiting for code...';
-
-        if (code && copyBtn) {
-          copyBtn.style.display = 'inline-flex';
-        }
-        if (hintEl) {
-          hintEl.textContent = code ? 'Code ready. Share it with the recipient.' : 'Waiting for approval code...';
-          if (code) {
-            hintEl.classList.remove('code-hint-pulse');
-            hintEl.style.fontWeight = '800';
-          } else {
-            hintEl.classList.add('code-hint-pulse');
-            hintEl.style.fontWeight = '';
-          }
-        }
-      }
-
-      // Sender also joins tracking room to receive rider location updates.
-      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+       // Sender also joins tracking room to receive rider location updates.
+       socket && socket.emit('join_delivery', { delivery_id: data.delivery_id });
     } catch (e) {
       console.error(e);
       setStatus('Error: ' + e.message);
@@ -401,11 +694,16 @@
     }
   });
 
-  socket.on('connect', () => {
-    setStatus('connected');
-  });
+   socket && socket.on('connect', () => {
+     setStatus('connected');
+     ensureJoinDelivery();
+   });
 
-  socket.on('delivery_initial', (payload) => {
+   ensureJoinDelivery();
+
+   document.getElementById('downloadReceiptBtn')?.addEventListener('click', downloadReceipt);
+
+   socket && socket.on('delivery_initial', (payload) => {
     if (payload && payload.pickup_lat != null) {
       pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
       pickupMarker.setLatLng(pickupLatLng);
@@ -418,9 +716,11 @@
       map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
     }
     renderTimeline(payload);
+    updateDownloadReceiptButton(payload.delivery_id || document.getElementById('deliveryId').value, payload.status);
+    initDeliveryChat(document.getElementById('deliveryId').value, payload.status);
   });
 
-  socket.on('delivery_offer', (payload) => {
+   socket && socket.on('delivery_offer', (payload) => {
     // Sender may not receive delivery_offer; it's primarily emitted to rider.
     // Keep for debugging.
     if (payload && payload.delivery_id) {
@@ -428,44 +728,171 @@
     }
   });
 
-  const copyBtn = document.getElementById('copyCodeBtn');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const codeEl = document.getElementById('approvalCode');
-      const code = (codeEl && codeEl.value ? String(codeEl.value) : '').trim();
-      if (!code) return;
-      try {
-        await navigator.clipboard.writeText(code);
-        setStatus('Approval code copied: ' + code);
-      } catch (e) {
-        // Fallback: prompt
-        alert('Copy this code: ' + code);
-      }
+document.getElementById('copyCodeBtn')?.addEventListener('click', async () => {
+       const codeEl = document.getElementById('approvalCode');
+       const code = (codeEl && codeEl.value ? String(codeEl.value) : '').trim();
+       if (!code) return;
+       try {
+         await navigator.clipboard.writeText(code);
+         spawnNotification('Copied', 'Approval code copied to clipboard!', 'info');
+       } catch (e) {
+         alert('Copy this code: ' + code);
+       }
+     });
+
+  const notifState = { items: [] };
+
+  function pushNotificationItem({ title, message, type }) {
+    const listEl = document.getElementById('notifList');
+    const countEl = document.getElementById('notifCount');
+    if (!listEl || !countEl) return;
+
+    if (notifState.items.length === 0) {
+      const empty = listEl.querySelector('.notif-empty');
+      if (empty) empty.remove();
+    }
+
+    notifState.items.push({ title, message, type, ts: Date.now() });
+    if (notifState.items.length > 30) notifState.items.shift();
+
+    listEl.innerHTML = '';
+    notifState.items.slice().reverse().forEach(n => {
+      const row = document.createElement('div');
+      row.className = 'notif-item';
+      const safeTitle = String(n.title || 'Update');
+      const safeMsg = String(n.message || '');
+      const d = new Date(n.ts);
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mm = String(d.getMinutes()).padStart(2,'0');
+      row.innerHTML = `
+        <div class="notif-item-title">${safeTitle}</div>
+        <div class="notif-item-msg">${safeMsg}</div>
+        <div class="notif-item-meta">${hh}:${mm} · ${n.type || 'info'}</div>
+      `;
+      listEl.appendChild(row);
     });
+
+    countEl.textContent = String(notifState.items.length);
   }
 
-  socket.on('delivery_status_update', (payload) => {
-    if (!payload) return;
-    const currentDeliveryId = document.getElementById('deliveryId').value;
-    if (payload.delivery_id && currentDeliveryId && String(payload.delivery_id) !== String(currentDeliveryId)) {
+   socket && socket.on('system_notification', (data) => {
+    // use default toast from base.html, but also persist to center panel
+    try { if (data) pushNotificationItem({ title: data.title, message: data.message, type: data.type }); } catch (e) {}
+  });
+
+   socket && socket.on('delivery_status_update', (payload) => {
+     if (!payload) return;
+     const currentDeliveryId = document.getElementById('deliveryId').value;
+     if (payload.delivery_id && currentDeliveryId && String(payload.delivery_id) !== String(currentDeliveryId)) {
+       return;
+     }
+
+     if (payload.delivery_id && !currentDeliveryId) {
+       document.getElementById('deliveryId').value = String(payload.delivery_id);
+       socket && socket.emit('join_delivery', { delivery_id: payload.delivery_id });
+     }
+
+    setStatus('status updated: ' + (payload.status || 'unknown'));
+    updateDeliveryBanner(payload);
+    updateDownloadReceiptButton(payload.delivery_id, payload.status);
+    renderTimeline(payload);
+    initDeliveryChat(payload.delivery_id, payload.status);
+
+    try {
+      if (typeof pushNotificationItem === 'function') {
+        pushNotificationItem({ title: 'Delivery Update', message: `Status → ${payload.status || 'unknown'}`, type: 'delivery' });
+      }
+    } catch (e) {}
+  });
+
+
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  function formatMinutes(mins) {
+    if (!isFinite(mins) || mins < 0) return '—';
+    if (mins < 1) return ' <1 min';
+    return ' ' + Math.round(mins) + ' min';
+  }
+
+  let etaState = {
+    lastFixTs: null,
+    lastLat: null,
+    lastLon: null,
+    emaSpeedKmh: null
+  };
+
+  function updateEtaFromGps(lat, lon, ts) {
+    const etaValueEl = document.getElementById('etaValue');
+    const etaSubEl = document.getElementById('etaSub');
+    if (!etaValueEl || !etaSubEl) return;
+    if (!dropoffLatLng) {
+      etaValueEl.textContent = '—';
+      etaSubEl.textContent = 'Waiting for rider GPS...';
       return;
     }
 
-    if (payload.delivery_id && !currentDeliveryId) {
-      document.getElementById('deliveryId').value = String(payload.delivery_id);
-      socket.emit('join_delivery', { delivery_id: payload.delivery_id });
+    const dToDropKm = haversineKm(lat, lon, dropoffLatLng[0], dropoffLatLng[1]);
+
+    // Need at least one previous fix to compute speed.
+    if (etaState.lastFixTs == null) {
+      etaState.lastFixTs = ts;
+      etaState.lastLat = lat;
+      etaState.lastLon = lon;
+      etaValueEl.textContent = '—';
+      etaSubEl.textContent = 'Calculating ETA from live movement...';
+      return;
     }
 
-    setStatus('status updated: ' + (payload.status || 'unknown'));
-    renderTimeline(payload);
-  });
+    const dtHours = (ts - etaState.lastFixTs) / 3600000;
+    if (dtHours <= 0) return;
 
-  socket.on('rider_location_update', (payload) => {
+    const distKm = haversineKm(etaState.lastLat, etaState.lastLon, lat, lon);
+    const speedKmh = distKm / dtHours;
+
+    // Filter jitter: ignore extremely low moves unless they last longer.
+    if (distKm < 0.01 && speedKmh < 5) {
+      etaState.lastFixTs = ts;
+      etaState.lastLat = lat;
+      etaState.lastLon = lon;
+      etaSubEl.textContent = 'Waiting for consistent movement...';
+      return;
+    }
+
+    // Exponential moving average for stable ETA
+    const alpha = 0.35;
+    if (etaState.emaSpeedKmh == null) etaState.emaSpeedKmh = speedKmh;
+    else etaState.emaSpeedKmh = alpha * speedKmh + (1 - alpha) * etaState.emaSpeedKmh;
+
+    const speed = etaState.emaSpeedKmh;
+    const etaHours = speed > 1 ? (dToDropKm / speed) : null;
+    const etaMins = etaHours != null ? etaHours * 60 : NaN;
+
+    etaValueEl.textContent = formatMinutes(etaMins);
+    etaSubEl.textContent = `Based on GPS speed · ~${dToDropKm.toFixed(2)} km remaining`;
+
+    etaState.lastFixTs = ts;
+    etaState.lastLat = lat;
+    etaState.lastLon = lon;
+  }
+
+   socket && socket.on('rider_location_update', (payload) => {
     if (!payload) return;
     if (payload.lat == null || payload.lon == null) return;
 
     const next = [payload.lat, payload.lon];
     riderMarker.setLatLng(next);
+    map.panTo(next);
+
+    updateEtaFromGps(payload.lat, payload.lon, Date.now());
 
     if (pickupLatLng && dropoffLatLng) {
       updateRoutePolyline();
@@ -485,13 +912,18 @@
 
   // Handle initialization on refresh
   window.addEventListener('load', () => {
+
     const dId = document.getElementById('deliveryId').value;
-    if (dId) {
-      socket.emit('join_delivery', { delivery_id: parseInt(dId, 10) });
+     if (dId) {
+      socket && socket.emit('join_delivery', { delivery_id: parseInt(dId, 10) });
     }
-    document.querySelectorAll('select[data-saved]').forEach(sel => {
-      if (sel.dataset.saved) sel.value = sel.dataset.saved;
+     document.querySelectorAll('select[data-saved]').forEach(sel => {
+       if (sel.dataset.saved) sel.value = sel.dataset.saved;
+     });
+      _updateSenderCopyCodeUi();
     });
-  });
-</script>
+    });
+
+
+  </script>
 {% endblock %}

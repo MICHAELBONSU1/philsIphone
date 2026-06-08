@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Trade-In Program - Phil's iPhone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .trade-in-container {
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+    }
+    
+    .trade-in-card {
+        background: var(--glass-light);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 
+            0 1px 0 rgba(255,255,255,0.45) inset,
+            0  6px 28px rgba(0,0,0,0.07),
+            0 22px 56px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .trade-in-card:hover {
+        box-shadow:
+            0 1px 0 rgba(255,255,255,0.50) inset,
+            0 10px 40px rgba(0,0,0,0.10),
+            0 30px 70px rgba(0,0,0,0.07);
+        transform: translateY(-2px);
+    }
+    
+    .trade-in-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .trade-in-header h2 {
+        color: var(--text-dark);
+        margin-bottom: 10px;
+    }
+    
+    .trade-in-header p {
+        color: var(--text-light);
+        font-size: 1.1rem;
+    }
+    
+    .form-group {
+        margin-bottom: 25px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--text-dark);
+    }
+    
+    .form-group select,
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid var(--border-light);
+        border-radius: 10px;
+        font-size: 16px;
+        transition: border-color 0.3s;
+        background: var(--bg-white);
+        color: var(--text-dark);
+    }
+    
+    .form-group select:focus,
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    [data-theme="dark"] .form-group select,
+    [data-theme="dark"] .form-group input,
+    [data-theme="dark"] .form-group textarea {
+        background: #21262d;
+        color: var(--text-light);
+        border-color: var(--border-light);
+    }
+    
+    .trade-in-preview {
+        margin: 25px 0;
+        padding: 20px;
+        background: rgba(102, 126, 234, 0.05);
+        border-radius: 15px;
+        border: 1px solid rgba(102, 126, 234, 0.1);
+    }
+    
+    .trade-in-preview h3 {
+        margin-top: 0;
+        color: var(--primary-color);
+    }
+    
+    .trade-in-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .btn-secondary {
+        background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-block;
+        text-align: center;
+    }
+    
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(108, 117, 125, 0.4);
+    }
+    
+    .trade-in-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin: 30px 0;
+    }
+    
+    .step {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 15px;
+        border: 1px solid var(--glass-border);
+    }
+    
+    .step i {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+        color: var(--primary-color);
+    }
+    
+    .step h4 {
+        margin-bottom: 10px;
+        color: var(--text-dark);
+    }
+    
+    .step p {
+        color: var(--text-light);
+        font-size: 0.9rem;
+    }
+    
+    [data-theme="dark"] .step {
+        background: rgba(255,255,255,0.02);
+    }
+    
+    [data-theme="dark"] .step h4 {
+        color: var(--text-light);
+    }
+    
+    [data-theme="dark"] .step p {
+        color: var(--text-light);
+        opacity: 0.8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trade-in-container">
+    <div class="trade-in-card">
+        <div class="trade-in-header">
+            <h2>Trade-In Your Device</h2>
+            <p>Get instant credit towards your next purchase</p>
+        </div>
+        
+        <div class="trade-in-steps">
+            <div class="step">
+                <i class="fas fa-mobile-alt"></i>
+                <h4>Tell Us About Your Device</h4>
+                <p>Select brand, model, and condition</p>
+            </div>
+            <div class="step">
+                <i class="fas fa-shipping-fast"></i>
+                <h4>Get Instant Quote</h4>
+                <p>See your trade-in value immediately</p>
+            </div>
+            <div class="step">
+                <i class="fas fa-credit-card"></i>
+                <h4>Shop & Save</h4>
+                <p>Apply credit to your next purchase</p>
+            </div>
+        </div>
+        
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        
+        {% if success %}
+        <div class="alert alert-success">
+            <h3>Trade-In Submitted!</h3>
+            <p>Your trade-in request has been received. We'll review it and contact you shortly.</p>
+            <p><strong>Estimated Value:</strong> ₵{{ "%.2f"|format(trade_value) }}</p>
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="{{ url_for('trade_in') }}">
+            <div class="form-group">
+                <label for="device_type">Device Type</label>
+                <select id="device_type" name="device_type" required>
+                    <option value="">Select Device Type</option>
+                    <option value="iphone">iPhone</option>
+                    <option value="ipad">iPad</option>
+                    <option value="macbook">MacBook</option>
+                    <option value="other_phone">Other Phone</option>
+                    <option value="other_laptop">Other Laptop</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="brand">Brand</label>
+                <input type="text" id="brand" name="brand" placeholder="e.g., Apple, Samsung, Dell" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="model">Model</label>
+                <input type="text" id="model" name="model" placeholder="e.g., iPhone 13 Pro, MacBook Air M2" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="condition">Condition</label>
+                <select id="condition" name="condition" required>
+                    <option value="">Select Condition</option>
+                    <option value="new">New (Sealed)</option>
+                    <option value="like-new">Like New (Minor wear)</option>
+                    <option value="good">Good (Visible wear, fully functional)</option>
+                    <option value="fair">Fair (Noticeable wear, functional)</option>
+                    <option value="poor">Poor (Significant damage, may have issues)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="storage">Storage Capacity</label>
+                <input type="text" id="storage" name="storage" placeholder="e.g., 64GB, 256GB, 1TB">
+            </div>
+            
+            <div class="form-group">
+                <label for="accessories">Included Accessories</label>
+                <select id="accessories" name="accessories" multiple>
+                    <option value="charger">Charger</option>
+                    <option value="cable">Charging Cable</option>
+                    <option value="box">Original Box</option>
+                    <option value="manuals">Manuals & Documentation</option>
+                    <option value="earphones">Earphones/Headphones</option>
+                    <option value="case">Case/Cover</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Additional Details</label>
+                <textarea id="description" name="description" rows="4" placeholder="Any additional details about the device..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary btn-block">Get Trade-In Value</button>
+            </div>
+        </form>
+        
+        {% if trade_value > 0 %}
+        <div class="trade-in-preview">
+            <h3>Your Estimated Trade-In Value</h3>
+            <div class="trade-in-value">₵{{ "%.2f"|format(trade_value) }}</div>
+            <p>This value can be applied as credit towards any purchase on Phil's iPhone.</p>
+            <p><small>Final value determined after inspection. Valid for 7 days.</small></p>
+        </div>
+        {% endif %}
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

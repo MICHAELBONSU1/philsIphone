@@ -42,6 +42,28 @@
         margin-top: 20px;
         display: inline-block;
     }
+    .location-badge {
+        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        border: 1px solid #93c5fd;
+        padding: 14px 18px;
+        border-radius: 14px;
+        margin-top: 18px;
+        text-align: left;
+        color: #1e3a8a;
+        font-size: 0.98rem;
+        line-height: 1.5;
+    }
+    .location-badge strong {
+        color: #1d4ed8;
+    }
+    .location-badge a {
+        color: #1d4ed8;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .location-badge a:hover {
+        text-decoration: underline;
+    }
 </style>
 {% endblock %}
 
@@ -53,6 +75,23 @@
             <p>Your unique User ID: <span class="user-id-display">{{ user.id }}</span></p>
             <p>Email: <strong>{{ user.email }}</strong></p>
             <p>Account Type: <strong>{{ 'Rider' if user.is_rider else 'Customer' }}</strong></p>
+            {% if user.last_lat is not none and user.last_lon is not none %}
+            <div class="location-badge">
+                <strong>Last login location captured</strong><br>
+                Coordinates: {{ '%.6f'|format(user.last_lat) }}, {{ '%.6f'|format(user.last_lon) }}<br>
+                {% if user.last_seen %}
+                Captured: {{ user.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+                <div style="margin-top:8px;">
+                    <a href="https://www.openstreetmap.org/?mlat={{ user.last_lat }}&mlon={{ user.last_lon }}&zoom=15" target="_blank" rel="noopener">View on map</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="location-badge">
+                <strong>No login location captured yet.</strong><br>
+                Enable location sharing on the login page to save your last login coordinates.
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

@@ -1,0 +1,701 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    :root {
+        --primary: #2262da;
+        --primary-dark: #1747a6;
+        --success: #10b981;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --dark: #111827;
+        --light: #f3f4f6;
+    }
+
+    body {
+        background: var(--light);
+    }
+
+    .viewer-wrapper {
+        padding: 20px 0;
+    }
+
+    .viewer-header {
+        background: white;
+        border-radius: 16px;
+        padding: 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .device-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+
+    .device-info h1 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--dark);
+        margin: 0;
+    }
+
+    .device-type {
+        font-size: 0.9rem;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+
+    .permission-badge {
+        display: inline-block;
+        background: #f0f9ff;
+        color: var(--primary);
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .viewer-content {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 25px;
+    }
+
+    .map-section {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+
+    #device-map {
+        width: 100%;
+        height: 500px;
+        border-radius: 12px;
+        background: var(--light);
+    }
+
+    .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .info-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .info-card-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+    }
+
+    .info-card-content {
+        color: var(--dark);
+        font-size: 0.95rem;
+    }
+
+    .location-text {
+        font-family: monospace;
+        font-size: 0.85rem;
+        word-break: break-all;
+    }
+
+    .action-button {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s ease;
+        font-size: 0.9rem;
+    }
+
+    .btn-alarm {
+        background: var(--danger);
+        color: white;
+    }
+
+    .btn-alarm:hover {
+        opacity: 0.9;
+    }
+
+    .btn-alarm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-erase {
+        background: white;
+        color: var(--danger);
+        border: 1px solid #fca5a5;
+        margin-top: 10px;
+    }
+
+    .btn-lock {
+        background: var(--dark);
+        color: white;
+    }
+
+    .btn-lock:hover {
+        opacity: 0.9;
+    }
+
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: #f0f9ff;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--success);
+        animation: pulse 2s infinite;
+    }
+
+    .status-dot.offline {
+        background: #d1d5db;
+        animation: none;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .permission-info {
+        background: #fef3c7;
+        border-left: 4px solid var(--warning);
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        color: #92400e;
+        margin-top: 15px;
+    }
+
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--dark);
+        color: white;
+        padding: 16px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(100px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @media (max-width: 968px) {
+        .viewer-content {
+            grid-template-columns: 1fr;
+        }
+
+        #device-map {
+            height: 300px;
+        }
+
+        .device-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+    }
+</style>
+
+    <div class="container-fluid viewer-wrapper">
+    <div class="viewer-header">
+            <div class="device-header">
+        <div class="device-info" style="display:flex; align-items:flex-start; gap:12px;">
+                <div>
+                    <a href="/findmy" class="back-link mb-2" style="display: flex; align-items: center; text-decoration: none; color: var(--primary); font-weight: 500; font-size: 0.95rem;">
+                        <i class="fas fa-chevron-left me-2"></i> Back to Find My
+                    </a>
+                    <h1 id="device-name"><i class="fas fa-phone me-2"></i>Device</h1>
+                    <div class="device-type" id="device-type-text">Type</div>
+                </div>
+            </div>
+            <span class="permission-badge" id="permission-badge">Loading...</span>
+        </div>
+    </div>
+
+
+    <div class="viewer-content">
+        <!-- Map -->
+        <div class="map-section">
+            <div id="device-map"></div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Status Card -->
+            <div class="info-card">
+                <div class="info-card-title">Status</div>
+                <div class="info-card-content">
+                    <div class="status-indicator">
+                        <div class="status-dot" id="status-dot"></div>
+                        <span id="device-status">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Location Card -->
+            <div class="info-card">
+                <div class="info-card-title">Last Seen</div>
+            <div class="info-card-content">
+                    <div style="margin-bottom:8px;" id="last-seen-time">--:--</div>
+                    <div class="location-text" id="last-coordinates">0.0000, 0.0000</div>
+                    <div style="margin-top:10px; display:flex; gap:10px;">
+                        <button class="action-button" style="width:auto; flex:1; background:#f0f9ff; color: #2262da; border:1px solid #bfdbfe;" onclick="copyLocationForDelivery()">
+                            <i class="fas fa-copy me-1"></i> Copy for delivery
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Card -->
+            <div id="actions-card" style="display:none;">
+                <button class="action-button btn-alarm" id="btn-alarm" onclick="triggerAlarm()">
+                    <i class="fas fa-bell me-1"></i> Play Sound
+                </button>
+                <button class="action-button btn-lock" id="btn-lock" onclick="openLockModal()" style="display:none; margin-top:10px;">
+                    <i class="fas fa-lock me-1"></i> Lock
+                </button>
+                <button class="action-button btn-erase" id="btn-erase" onclick="openEraseModal()" style="display:none;">
+                    <i class="fas fa-trash me-1"></i> Erase
+                </button>
+                <div class="permission-info" id="permission-info" style="display:none;"></div>
+            </div>
+
+            <!-- History Link -->
+            <div class="info-card">
+                <a href="#" id="view-history-btn" style="
+                    color: var(--primary);
+                    text-decoration: none;
+                    font-weight: 600;
+                    display: block;
+                    text-align: center;
+                    padding: 8px;
+                " onclick="return false;">
+                    <i class="fas fa-history me-1"></i> View History
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lock Device Modal -->
+<div id="lock-device-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Lock Device</div>
+        <p>This device will be locked and your message will be displayed on the screen.</p>
+        <div class="form-group">
+            <label class="form-label">Recovery Message</label>
+            <textarea id="lock-message-input" class="form-control" rows="3" placeholder="This device has been lost. Please call the owner."></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Contact Number (Optional)</label>
+            <input type="text" id="lock-contact-input" class="form-control" placeholder="+1 (555) 123-4567" />
+        </div>
+        <div class="modal-actions">
+            <button class="btn-modal btn-cancel" onclick="closeLockModal()">Cancel</button>
+            <button class="btn-modal btn-confirm" onclick="lockDevice()">Lock Device</button>
+        </div>
+    </div>
+</div>
+
+<!-- Erase Device Modal -->
+<div id="erase-device-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header" style="color: var(--danger);">Erase Device</div>
+        <p><strong>Warning:</strong> This will permanently erase all data on the device and cannot be undone.</p>
+        <p>Are you sure you want to erase this device?</p>
+        <div class="modal-actions">
+            <button class="btn-modal btn-cancel" onclick="closeEraseModal()">Cancel</button>
+            <button class="btn-modal btn-confirm" style="background: var(--danger);" onclick="eraseDevice()">Erase Device</button>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Socket.IO -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+    // =====================================================================
+    // GLOBALS
+    // =====================================================================
+
+    const params = new URLSearchParams(window.location.search);
+    const deviceId = params.get('device_id');
+    const shareToken = params.get('token');
+
+    let map = null;
+    let marker = null;
+    let socket = io();
+    let currentDevice = null;
+    let currentShare = null;
+    let permissionLevel = 'view_only';
+
+    // =====================================================================
+    // INITIALIZATION
+    // =====================================================================
+
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!deviceId && !shareToken) {
+            showToast('Invalid access', 'error');
+            return;
+        }
+
+        initMap();
+        loadDeviceData();
+        setupSocketIO();
+    });
+
+    function initMap() {
+        map = L.map('device-map').setView([5.6037, -0.1870], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+    }
+
+    async function loadDeviceData() {
+        try {
+            const url = shareToken 
+                ? `/api/findmy/device/${deviceId}/location/current?share_token=${shareToken}`
+                : `/api/findmy/device/${deviceId}/location/current`;
+
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                showToast('Access denied', 'error');
+                return;
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                showToast(data.error || 'Failed to load device', 'error');
+                return;
+            }
+
+            currentDevice = data.location;
+            updateUI();
+            
+            // Get permission level if public share
+            if (shareToken) {
+                try {
+                    const shareResponse = await fetch(`/api/findmy/share/${shareToken}/access`);
+                    const shareData = await shareResponse.json();
+                    if (shareData.success) {
+                        currentShare = shareData;
+                        permissionLevel = shareData.permission_level;
+                        updatePermissionUI();
+                    }
+                } catch (e) {
+                    console.warn('Failed to get share details:', e);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error loading device data', 'error');
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('device-name').textContent = 
+            currentDevice.device_label || 'Device';
+        document.getElementById('device-type-text').textContent = 
+            currentDevice.device_type || 'Unknown';
+
+        updateLocation();
+        updateActions();
+    }
+
+    function updateLocation() {
+        if (currentDevice.latitude && currentDevice.longitude) {
+            const latlng = [currentDevice.latitude, currentDevice.longitude];
+            
+            if (!marker) {
+                marker = L.marker(latlng)
+                    .addTo(map)
+                    .bindPopup(`<b>${currentDevice.device_label}</b>`);
+            } else {
+                marker.setLatLng(latlng);
+            }
+
+            map.setView(latlng, 15);
+
+            document.getElementById('last-coordinates').textContent = 
+                `${currentDevice.latitude.toFixed(4)}, ${currentDevice.longitude.toFixed(4)}`;
+        }
+
+        if (currentDevice.last_seen_at) {
+            const date = new Date(currentDevice.last_seen_at);
+            document.getElementById('last-seen-time').textContent = date.toLocaleTimeString();
+        }
+    }
+
+    function updateActions() {
+        const actionsCard = document.getElementById('actions-card');
+        actionsCard.style.display = 'block';
+
+        if (permissionLevel === 'view_only') {
+            document.getElementById('btn-alarm').style.display = 'none';
+            document.getElementById('btn-lock').style.display = 'none';
+            document.getElementById('btn-erase').style.display = 'none';
+            document.getElementById('permission-info').textContent = 
+                'You have view-only access to this device.';
+            document.getElementById('permission-info').style.display = 'block';
+        } else if (permissionLevel === 'view_and_alert') {
+            document.getElementById('btn-alarm').style.display = 'block';
+            document.getElementById('btn-lock').style.display = 'none';
+            document.getElementById('btn-erase').style.display = 'none';
+            document.getElementById('permission-info').textContent = 
+                'You can view location and trigger alarms.';
+            document.getElementById('permission-info').style.display = 'block';
+        } else if (permissionLevel === 'full_control') {
+            document.getElementById('btn-alarm').style.display = 'block';
+            document.getElementById('btn-lock').style.display = 'block';
+            document.getElementById('btn-erase').style.display = 'block';
+            document.getElementById('permission-info').style.display = 'none';
+        }
+    }
+
+    function updatePermissionUI() {
+        const badges = {
+            'view_only': 'View Only',
+            'view_and_alert': 'View & Alert',
+            'full_control': 'Full Control'
+        };
+        document.getElementById('permission-badge').textContent = 
+            badges[permissionLevel] || 'Unknown';
+    }
+
+    // =====================================================================
+    // SOCKET.IO
+    // =====================================================================
+
+    function setupSocketIO() {
+        socket.on('connect', () => {
+            console.log('Connected to socket');
+            socket.emit('findmy:join_device_room', {
+                device_id: deviceId,
+                share_token: shareToken
+            });
+        });
+
+        socket.on('location_stream_update', (data) => {
+            if (data.device_id == deviceId) {
+                currentDevice.latitude = data.latitude;
+                currentDevice.longitude = data.longitude;
+                currentDevice.last_seen_at = data.timestamp;
+                updateLocation();
+            }
+        });
+
+        socket.on('device_status_changed', (data) => {
+            if (data.device_id == deviceId) {
+                const dot = document.getElementById('status-dot');
+                const statusText = document.getElementById('device-status');
+                
+                if (data.status === 'online') {
+                    dot.classList.remove('offline');
+                    statusText.textContent = 'Online';
+                } else {
+                    dot.classList.add('offline');
+                    statusText.textContent = 'Offline';
+                }
+            }
+        });
+
+        socket.on('alarm_acknowledged', (data) => {
+            if (data.device_id == deviceId) {
+                showToast('Device acknowledged alarm', 'success');
+            }
+        });
+
+        socket.on('error', (data) => {
+            console.error('Socket error:', data);
+        });
+    }
+
+    // =====================================================================
+    // ACTIONS
+    // =====================================================================
+
+    async function triggerAlarm() {
+        const button = document.getElementById('btn-alarm');
+        button.disabled = true;
+
+        try {
+            const response = await fetch('/api/device/trigger_alarm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    share_token: shareToken
+                })
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                showToast(data.error || 'Failed to trigger alarm', 'error');
+                button.disabled = false;
+                return;
+            }
+
+            showToast('Alarm triggered!', 'success');
+
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error triggering alarm', 'error');
+            button.disabled = false;
+        }
+    }
+
+    // Lock functionality with modal
+    function openLockModal() {
+        document.getElementById('lock-device-modal').classList.add('show');
+    }
+
+    function closeLockModal() {
+        document.getElementById('lock-device-modal').classList.remove('show');
+    }
+
+    async function lockDevice() {
+        const message = document.getElementById('lock-message-input').value;
+        const contact = document.getElementById('lock-contact-input').value;
+
+        try {
+            const response = await fetch('/api/device/remote_lock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    share_token: shareToken,
+                    message: message,
+                    contact_number: contact
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast('Lock command sent!', 'success');
+                closeLockModal();
+            } else {
+                showToast(data.error || 'Failed to lock', 'error');
+            }
+        } catch (error) {
+            showToast('Error sending lock command', 'error');
+        }
+    }
+
+    // Erase functionality with modal
+    function openEraseModal() {
+        document.getElementById('erase-device-modal').classList.add('show');
+    }
+
+    function closeEraseModal() {
+        document.getElementById('erase-device-modal').classList.remove('show');
+    }
+
+    async function eraseDevice() {
+        try {
+            const response = await fetch('/api/device/remote_erase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    device_id: deviceId,
+                    share_token: shareToken
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast('Erase command sent!', 'success');
+                closeEraseModal();
+                document.getElementById('device-status').textContent = 'Erasing...';
+                document.getElementById('status-dot').classList.add('offline');
+                document.getElementById('actions-card').style.display = 'none';
+            } else {
+                showToast(data.error || 'Failed to erase', 'error');
+            }
+        } catch (error) {
+            showToast('Error sending erase command', 'error');
+        }
+    }
+
+    // =====================================================================
+    // UTILITIES
+    // =====================================================================
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `<i class="fas fa-${
+            type === 'success' ? 'check-circle' : 
+            type === 'error' ? 'exclamation-circle' : 
+            'info-circle'
+        } me-2"></i>${message}`;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    async function copyLocationForDelivery() {
+        try {
+            const lat = currentDevice?.latitude;
+            const lon = currentDevice?.longitude;
+            const label = currentDevice?.device_label || 'Device';
+
+            if (lat == null || lon == null) {
+                showToast('Location not available yet', 'error');
+                return;
+            }
+
+            const text = `${label} - ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+            await navigator.clipboard.writeText(text);
+            showToast('Copied pickup location for delivery', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('Copy failed (clipboard permission)', 'error');
+        }
+    }
+</script>
+
+{% endblock %}

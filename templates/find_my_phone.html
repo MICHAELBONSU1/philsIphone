@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Find My Phone System</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #eef3ff;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 340px;
+    background: #0f172a;
+    color: white;
+    padding: 20px;
+}
+
+#map {
+    width: 100%;
+    height: 100vh;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border-radius: 10px;
+    border: none;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 10px;
+    background: #2262da;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.card {
+    background: #111827;
+    padding: 15px;
+    margin-top: 15px;
+    border-radius: 12px;
+}
+
+.code {
+    color: #22c55e;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="sidebar">
+
+        <h2>📍 Find My Phone</h2>
+
+        <div class="card">
+            <b>Your Tracking Code</b>
+            <div id="trackId" class="code"></div>
+        </div>
+
+        <input id="searchInput" placeholder="Enter Tracking Code">
+        <button onclick="searchDevice()">Track Device</button>
+
+        <div class="card">
+            <b>Status</b>
+            <div id="status">Waiting for GPS...</div>
+        </div>
+
+    </div>
+
+    <div id="map"></div>
+
+</div>
+
+<script>
+// =========================
+// GENERATE TRACKING ID
+// =========================
+function generateId() {
+    return "TRACK-" + Math.random().toString(36).substring(2,6).toUpperCase()
+        + "-" + Math.random().toString(36).substring(2,6).toUpperCase();
+}
+
+let trackId = localStorage.getItem("track_id");
+
+if (!trackId) {
+    trackId = generateId();
+    localStorage.setItem("track_id", trackId);
+}
+
+document.getElementById("trackId").innerText = trackId;
+
+
+// =========================
+// MAP INIT
+// =========================
+let map = L.map('map').setView([5.6037, -0.1870], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+}).addTo(map);
+
+let marker = L.marker([5.6037, -0.1870]).addTo(map);
+
+
+// =========================
+// REGISTER DEVICE
+// =========================
+fetch("/api/register", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ track_id: trackId })
+});
+
+
+// =========================
+// SEND LOCATION
+// =========================
+function sendLocation(lat, lng) {
+
+    fetch("/api/update", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            track_id: trackId,
+            latitude: lat,
+            longitude: lng
+        })
+    });
+
+}
+
+
+// =========================
+// LIVE TRACKING
+// =========================
+function startTracking() {
+
+    navigator.geolocation.watchPosition(pos => {
+
+        let lat = pos.coords.latitude;
+        let lng = pos.coords.longitude;
+
+        marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], 16);
+
+        document.getElementById("status").innerText =
+            "Live tracking active";
+
+        sendLocation(lat, lng);
+
+    });
+
+}
+
+startTracking();
+
+
+// =========================
+// SEARCH DEVICE
+// =========================
+async function searchDevice() {
+
+    let code = document.getElementById("searchInput").value;
+
+    let res = await fetch("/api/device/" + code);
+    let data = await res.json();
+
+    if (!data.latitude) {
+        Swal.fire("Not Found", "Device not found", "error");
+        return;
+    }
+
+    marker.setLatLng([data.latitude, data.longitude]);
+    map.setView([data.latitude, data.longitude], 16);
+
+    Swal.fire("Found", "Device located successfully", "success");
+}
+
+</script>
+
+</body>
+</html>

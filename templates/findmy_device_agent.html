@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find My - Device Agent</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .agent-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #000;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .setup-section {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .setup-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: monospace;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #2262da;
+            box-shadow: 0 0 0 3px rgba(34,98,218,0.1);
+        }
+
+        button {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #2262da;
+            color: white;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn-primary:hover {
+            background: #1747a6;
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status-section {
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            display: none;
+        }
+
+        .status-section.show {
+            display: block;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-icon {
+            font-size: 1.2rem;
+            min-width: 24px;
+        }
+
+        .status-icon.connected {
+            color: #10b981;
+        }
+
+        .status-icon.tracking {
+            color: #3b82f6;
+        }
+
+        .status-icon.error {
+            color: #ef4444;
+        }
+
+        .status-text {
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .lock-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+        }
+
+        .lock-screen.show {
+            display: flex;
+        }
+
+        .lock-box {
+            text-align: center;
+            max-width: 400px;
+            padding: 20px;
+        }
+
+        .lock-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .lock-message {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .lock-contact {
+            font-size: 1rem;
+            color: #ccc;
+            margin-bottom: 30px;
+        }
+
+        .pin-input-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .pin-input {
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            font-size: 1.5rem;
+            text-align: center;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .pin-input:focus {
+            outline: none;
+            border-color: white;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .unlock-btn {
+            width: 100%;
+            padding: 14px;
+            background: white;
+            color: black;
+            font-weight: 700;
+            border-radius: 8px;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .unlock-btn:hover {
+            opacity: 0.9;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .alarm {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #ef4444;
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 10000;
+            display: none;
+            animation: shake 0.5s infinite;
+        }
+
+        .alarm.show {
+            display: block;
+        }
+
+        .alarm-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            animation: ring 1s infinite;
+        }
+
+        .alarm-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+            10% { transform: translate(-50%, -50%) rotate(2deg); }
+            20% { transform: translate(-50%, -50%) rotate(-2deg); }
+        }
+
+        @keyframes ring {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        @media (max-width: 600px) {
+            .agent-container {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 1.2rem;
+            }
+
+            .logo {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="agent-container">
+        <div class="header">
+            <div class="logo">📍</div>
+            <h1>Find My Phone</h1>
+            <p>Device Agent Setup</p>
+        </div>
+
+        <!-- Setup Section -->
+        <div class="setup-section" id="setup-section">
+            <div class="setup-label">Device Token</div>
+            <div class="input-group">
+                <input type="text" id="device-token" placeholder="DEV-xxxxxxxxxxxxx" readonly />
+                <button onclick="copyDeviceToken()" title="Copy token">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            <div style="font-size: 0.85rem; color: #666; margin-top: 8px;">
+                Get this token when you register a device
+            </div>
+
+            <div class="setup-label" style="margin-top: 20px;">Enter Device Token</div>
+            <div class="input-group">
+                <input type="password" id="token-input" placeholder="Paste device token here" />
+            </div>
+
+            <button class="btn-primary" onclick="connectDevice()">
+                <i class="fas fa-plug me-2"></i> Connect Device
+            </button>
+        </div>
+
+        <!-- Status Section -->
+        <div class="status-section" id="status-section">
+            <div class="status-item">
+                <div class="status-icon connected">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="status-text">
+                    Connected to server
+                </div>
+            </div>
+
+            <div class="status-item" id="gps-status">
+                <div class="status-icon tracking">
+                    <i class="fas fa-satellite"></i>
+                </div>
+                <div class="status-text">
+                    Waiting for GPS...
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #bfdbfe;">
+                <button class="btn-primary" onclick="startTracking()">
+                    <i class="fas fa-location-dot me-2"></i> Start Live Tracking
+                </button>
+                <button class="btn-primary" style="background: #666; margin-top: 10px;" onclick="stopTracking()">
+                    <i class="fas fa-stop-circle me-2"></i> Stop Tracking
+                </button>
+                <button class="btn-primary" style="background: #dc2626; margin-top: 10px;" onclick="logout()">
+                    <i class="fas fa-sign-out-alt me-2"></i> Logout
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lock Screen -->
+    <div class="lock-screen" id="lock-screen">
+        <div class="lock-box">
+            <div class="lock-icon">
+                <i class="fas fa-lock"></i>
+            </div>
+            <div class="lock-message" id="lock-message">Device Locked</div>
+            <div class="lock-contact" id="lock-contact">Contact the owner</div>
+            
+            <div class="pin-input-section" id="pin-inputs"></div>
+            
+            <button class="unlock-btn" onclick="submitPin()">Unlock</button>
+            
+            <div class="error-message" id="pin-error">Incorrect PIN</div>
+        </div>
+    </div>
+
+    <!-- Alarm -->
+    <div class="alarm" id="alarm">
+        <div class="alarm-icon">
+            <i class="fas fa-bell"></i>
+        </div>
+        <div class="alarm-text">Emergency Alarm!</div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // GLOBALS
+        // =====================================================================
+
+        let socket = io();
+        let deviceToken = null;
+        let isTracking = false;
+        let watchId = null;
+        let audioContext = null;
+
+        // =====================================================================
+        // INITIALIZATION
+        // =====================================================================
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Load saved token if exists
+            const savedToken = localStorage.getItem('device_token');
+            if (savedToken) {
+                deviceToken = savedToken;
+                document.getElementById('device-token').value = savedToken;
+                connectDevice(savedToken);
+            }
+        });
+
+        // =====================================================================
+        // DEVICE SETUP
+        // =====================================================================
+
+        function copyDeviceToken() {
+            if (!deviceToken) {
+                alert('No device token generated yet');
+                return;
+            }
+            navigator.clipboard.writeText(deviceToken);
+            alert('Token copied!');
+        }
+
+        async function connectDevice(token) {
+            token = token || document.getElementById('token-input').value;
+
+            if (!token) {
+                alert('Please enter device token');
+                return;
+            }
+
+            // Save token
+            localStorage.setItem('device_token', token);
+            deviceToken = token;
+
+            // Show status section
+            document.getElementById('setup-section').style.display = 'none';
+            document.getElementById('status-section').classList.add('show');
+
+            // Connect to socket
+            socket.emit('findmy:device_online', {});
+
+            // Request GPS permission
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        updateGPSStatus(true);
+                    },
+                    () => {
+                        updateGPSStatus(false);
+                        alert('GPS access denied. Please enable location services.');
+                    }
+                );
+            }
+        }
+
+        function updateGPSStatus(available) {
+            const status = document.getElementById('gps-status');
+            if (available) {
+                status.innerHTML = `
+                    <div class="status-icon tracking">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="status-text">
+                        GPS Ready
+                    </div>
+                `;
+            } else {
+                status.innerHTML = `
+                    <div class="status-icon error">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="status-text">
+                        GPS unavailable
+                    </div>
+                `;
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('device_token');
+            deviceToken = null;
+            isTracking = false;
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            document.getElementById('setup-section').style.display = 'block';
+            document.getElementById('status-section').classList.remove('show');
+            document.getElementById('token-input').value = '';
+        }
+
+        // =====================================================================
+        // LIVE TRACKING
+        // =====================================================================
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                alert('Geolocation not available');
+                return;
+            }
+
+            isTracking = true;
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const { latitude, longitude, accuracy } = position.coords;
+
+                    // Send to server
+                    fetch(`/api/findmy/device/1/location/update`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${deviceToken}`
+                        },
+                        body: JSON.stringify({
+                            latitude: latitude,
+                            longitude: longitude,
+                            accuracy: accuracy
+                        })
+                    }).catch(err => console.error('Location update error:', err));
+                },
+                (error) => {
+                    console.error('GPS error:', error);
+                    updateGPSStatus(false);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 5000,
+                    timeout: 10000
+                }
+            );
+
+            alert('Live tracking started');
+        }
+
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            isTracking = false;
+            alert('Live tracking stopped');
+        }
+
+        // =====================================================================
+        // SOCKET.IO EVENTS
+        // =====================================================================
+
+        socket.on('device_remote_lock', (data) => {
+            showLockScreen(data.message, data.contact_number);
+        });
+
+        socket.on('device_remote_unlock', () => {
+            hideLockScreen();
+        });
+
+        socket.on('device_trigger_alarm', () => {
+            playAlarm();
+        });
+
+        socket.on('device_remote_erase', (data) => {
+            // Simulate actual device erase
+            document.body.innerHTML = `
+                <div style="background:black; color:white; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px;">
+                    <i class="fas fa-apple-whole" style="font-size: 4rem; margin-bottom: 30px;"></i>
+                    <h1 style="font-size: 1.5rem; margin-bottom: 10px;">Device Erased</h1>
+                    <p style="color:#888;">${data.message || 'This device has been remotely wiped.'}</p>
+                </div>
+            `;
+            localStorage.clear();
+        });
+
+        socket.on('error', (data) => {
+            console.error('Socket error:', data);
+        });
+
+        // =====================================================================
+        // LOCK SCREEN
+        // =====================================================================
+
+        function showLockScreen(message, contact) {
+            document.getElementById('lock-message').textContent = message || 'Device Locked';
+            document.getElementById('lock-contact').textContent = contact || '';
+            document.getElementById('lock-screen').classList.add('show');
+
+            // Create PIN input fields
+            const container = document.getElementById('pin-inputs');
+            container.innerHTML = '';
+            for (let i = 0; i < 4; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.maxLength = '1';
+                input.className = 'pin-input';
+                input.inputMode = 'numeric';
+                input.addEventListener('keyup', (e) => {
+                    if (e.key === 'Backspace' && i > 0) {
+                        container.children[i - 1].focus();
+                    } else if (/\d/.test(e.key) && i < 3) {
+                        container.children[i + 1].focus();
+                    }
+                });
+                container.appendChild(input);
+            }
+            container.children[0].focus();
+        }
+
+        function hideLockScreen() {
+            document.getElementById('lock-screen').classList.remove('show');
+        }
+
+        function submitPin() {
+            const inputs = document.querySelectorAll('.pin-input');
+            const pin = Array.from(inputs).map(i => i.value).join('');
+
+            if (pin.length !== 4) {
+                showPinError('Please enter all 4 digits');
+                return;
+            }
+
+            // Send to server
+            fetch(`/api/findmy/device/1/unlock`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${deviceToken}`
+                },
+                body: JSON.stringify({ pin: pin })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    hideLockScreen();
+                } else {
+                    showPinError('Incorrect PIN');
+                    clearPinInputs();
+                }
+            })
+            .catch(err => {
+                showPinError('Error: ' + err.message);
+            });
+        }
+
+        function showPinError(message) {
+            const error = document.getElementById('pin-error');
+            error.textContent = message;
+            error.classList.add('show');
+            setTimeout(() => error.classList.remove('show'), 3000);
+        }
+
+        function clearPinInputs() {
+            document.querySelectorAll('.pin-input').forEach(input => {
+                input.value = '';
+            });
+            document.querySelector('.pin-input').focus();
+        }
+
+        // =====================================================================
+        // ALARM
+        // =====================================================================
+
+        function playAlarm() {
+            const alarm = document.getElementById('alarm');
+            alarm.classList.add('show');
+
+            // Play sound using Web Audio API
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                const now = audioContext.currentTime;
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+
+                osc.frequency.value = 1000; // 1kHz tone
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch (e) {
+                console.warn('Audio not available:', e);
+            }
+
+            // Repeat every 2 seconds
+            setInterval(() => {
+                if (alarm.classList.contains('show')) {
+                    try {
+                        const now = audioContext.currentTime;
+                        const osc = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioContext.destination);
+                        osc.frequency.value = 1000;
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                        osc.start(now);
+                        osc.stop(now + 0.5);
+                    } catch (e) {
+                        // Silent fail
+                    }
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

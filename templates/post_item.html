@@ -52,10 +52,14 @@
             {% if session.get('can_post') or session.get('is_admin') %}
             <button type="submit" class="btn btn-primary">Post Item</button>
             {% else %}
-            <form method="POST" action="{{ url_for('request_access') }}">
-                <button type="submit" class="btn btn-primary">Request Access</button>
-            </form>
+            <button type="button" class="btn btn-primary" id="requestAccessBtn" onclick="
+                var f = document.createElement('form');
+                f.method='POST'; f.action='{{ url_for('request_access') }}';
+                document.body.appendChild(f);
+                f.submit();
+            ">Request Access</button>
             {% endif %}
+        </form>
         </div>
     </div>
 {% endblock %}

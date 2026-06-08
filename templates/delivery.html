@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Delivery (Legacy) - Phil's iPhone{% endblock %}
+{% block title %}Delivery - Phil's iPhone{% endblock %}
 
 
 {% block extra_css %}
@@ -14,6 +14,23 @@
   #map { height: 520px; border-radius: 15px; }
   .muted { color:#666; font-size: 14px; }
   .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .rider-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; width: 100%; }
+  .rider-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; cursor: pointer; transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    min-width: 220px; }
+  .rider-card:hover { transform: translateY(-1px); border-color: #60a5fa; box-shadow: 0 8px 20px rgba(96, 165, 250, 0.12); }
+  .rider-card.selected { border-color: #2563eb; background: #eff6ff; }
+  .rider-card.offline { opacity: 0.65; cursor: not-allowed; }
+  .rider-card h4 { margin: 0 0 8px 0; font-size: 1rem; }
+  .rider-card .meta { font-size: 0.95rem; color: #475569; margin-bottom: 8px; }
+  .rider-card .badge { display: inline-flex; align-items:center; gap: 6px; font-size: 0.82rem; padding: 4px 8px; border-radius: 999px; background: #e0f2fe; color: #0369a1; }
+  .rider-card.offline .badge { background: #f8fafc; color: #475569; }
+  .rider-card .distance { font-weight: 700; margin-top: 8px; }
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; }
+  .status-pill.online { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .status-pill.offline { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
+  .chat-bubble { margin-bottom: 12px; padding: 12px 14px; border-radius: 16px; background: #ffffff; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+  .chat-bubble .sender { display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 6px; color: #111827; }
+  .chat-bubble .chat-meta { font-size: 0.75rem; color: #6b7280; margin-top: 6px; }
 </style>
 {% endblock %}
 
@@ -21,12 +38,12 @@
 <div class="container">
   <div class="panel" style="margin-bottom:20px;">
     <h2 style="margin-bottom:8px;">Delivery (Live Map)</h2>
-      <p class="muted">Sender requests delivery (system matches a rider). Recipient tracks live as the driver accepts, goes en-route, and confirms handover.</p>
+      <p class="muted">Request a delivery, choose a rider, and track the shipment in real time with a shared delivery room for sender, rider, and recipient.</p>
   </div>
 
   <div class="delivery-layout">
   <div class="panel">
-      <h3 style="margin-bottom:14px;">Bolt-like Delivery Flow</h3>
+      <h3 style="margin-bottom:14px;">Live Delivery Flow</h3>
 
 
       <div class="field">
@@ -44,27 +61,65 @@
         <label>Dropoff (address or city)</label>
         <input id="dropoff" placeholder="e.g., East Legon" />
       </div>
+      <div class="field">
+        <label>Choose Rider</label>
+        <div style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+          <div id="riderCards" class="rider-cards"></div>
+          <button id="findRiderBtn" class="btn btn-secondary" type="button" style="height:44px;">Refresh Riders</button>
+        </div>
+        <input type="hidden" id="selectedRiderId" />
+        <div id="selectedRiderStatus" class="muted" style="margin-top:8px;">No rider selected.</div>
+        <p class="muted" style="margin-top:8px;">Pick an available rider before confirming the delivery request.</p>
+      </div>
 
       <div class="btn-row">
         <button id="geocodeBtn" class="btn btn-primary">Set Locations</button>
-        <button id="createBtn" class="btn btn-success">Request Delivery</button>
-
+        <button id="createBtn" class="btn btn-success">Confirm Request</button>
+        <button id="downloadReceiptBtn" class="btn btn-info" type="button" disabled style="display:none;">Download Receipt</button>
       </div>
 
       <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
 
       <hr style="margin:18px 0;" />
 
-      <h3 style="margin-bottom:14px;">Delivery Guy Controls</h3>
-      <p class="muted">Enter the delivery ID you received and start sending location updates.</p>
+      <h3 style="margin-bottom:14px;">Delivery Controls</h3>
+      <p class="muted">Use this section to manage rider availability and join a shared delivery room for status updates and messaging.</p>
+
+      {% if session.get('is_rider') %}
+      <div class="field" style="margin-top:12px;">
+        <label>Rider Availability</label>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span id="riderOnlineStatus" class="status-pill offline">Offline</span>
+          <button id="toggleOnlineBtn" class="btn btn-secondary" type="button">Go Live</button>
+          <button id="refreshStatusBtn" class="btn btn-light" type="button">Refresh Status</button>
+        </div>
+        <p class="muted" style="margin-top:8px;">Go live to receive delivery matches or go offline when you are unavailable.</p>
+      </div>
+      {% endif %}
 
       <div class="field">
         <label for="deliveryId">Delivery ID</label>
         <input id="deliveryId" placeholder="e.g., 1" />
       </div>
       <div class="btn-row">
-        <button id="startRiderBtn" class="btn btn-primary">Start Live Updates</button>
-        <button id="stopRiderBtn" class="btn btn-danger">Stop</button>
+        <button id="startRiderBtn" class="btn btn-primary">Join Delivery Room</button>
+        <button id="stopRiderBtn" class="btn btn-danger">Stop Live Updates</button>
+      </div>
+
+      <div id="deliveryChatCard" class="card shadow-sm mb-4" style="border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: white; margin-top: 18px;">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
+          <h6 class="mb-0" style="color:white;"><i class="fas fa-comments me-2"></i>Delivery Chat</h6>
+          <span id="chatRoomBadge" class="badge bg-info text-dark">3-Party Room</span>
+        </div>
+        <div id="deliveryChatBox" class="card-body" style="height: 260px; overflow-y: auto; background: #f8fafc; padding: 15px;">
+          <div id="deliveryChatEmpty" class="muted">Join the delivery room to chat with sender, rider, and recipient.</div>
+        </div>
+        <div class="card-footer bg-light p-2">
+          <div style="display: flex; gap: 5px;">
+            <input type="text" id="deliveryChatInput" class="form-control" style="flex: 1; border-radius: 20px; padding: 8px 15px;" placeholder="Join the delivery room to send messages..." disabled>
+            <button id="deliveryChatSendBtn" class="btn btn-primary" style="border-radius: 50%; width: 40px; height: 40px;" disabled><i class="fas fa-paper-plane"></i></button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -81,13 +136,10 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
 <script>
-  // NOTE: Using OpenStreetMap (Nominatim) for geocoding (no API key required).
-  // This is rate-limited; you may need to add throttling later.
-
-  const socket = io();
+  // Socket is provided by base.html globalSocket; fall back to window.io if available
+  var socket = window.globalSocket || (window.io ? window.io() : null);
+  if (!socket) { console.warn('[delivery] socket.io unavailable'); }
 
   // Initialize map
   const map = L.map('map').setView([5.6037, -0.1870], 12);
@@ -114,6 +166,9 @@
 
   let watchId = null;
   let riderTimer = null;
+  let currentDeliveryId = null;
+  const currentUserId = {{ session.get('user_id') | tojson }};
+  const isRider = {{ session.get('is_rider') | tojson }};
 
   function setStatus(msg) {
     document.getElementById('status').textContent = 'Status: ' + msg;
@@ -121,6 +176,39 @@
 
   let routePolyline = null;
   let trackingPolyline = null;
+
+  function updateDownloadReceiptButton(deliveryId, status) {
+    const btn = document.getElementById('downloadReceiptBtn');
+    if (!btn) return;
+    if (deliveryId && ['paid', 'roadside_handover'].includes(status)) {
+      btn.dataset.deliveryId = deliveryId;
+      btn.disabled = false;
+      btn.style.display = 'inline-flex';
+    } else if (deliveryId) {
+      btn.dataset.deliveryId = deliveryId;
+      btn.disabled = true;
+      btn.style.display = 'inline-flex';
+    } else {
+      btn.removeAttribute('data-delivery-id');
+      btn.style.display = 'none';
+    }
+  }
+
+  function downloadReceipt() {
+    const btn = document.getElementById('downloadReceiptBtn');
+    if (!btn || !btn.dataset.deliveryId) return;
+    window.location.href = `/delivery/${btn.dataset.deliveryId}/receipt/download`;
+  }
+
+  function ensureJoinDelivery() {
+    const idText = document.getElementById('deliveryId')?.value;
+    const deliveryId = idText ? parseInt(idText, 10) : NaN;
+    if (!Number.isFinite(deliveryId) || deliveryId <= 0) return;
+    currentDeliveryId = deliveryId;
+    socket && socket.emit('join_delivery', { delivery_id: deliveryId });
+    loadDeliveryMessages(deliveryId);
+    enableChatControls(true);
+  }
 
   function updateRoutePolyline() {
     if (!pickupLatLng || !dropoffLatLng) return;
@@ -151,13 +239,45 @@
   }
 
   async function geocode(query) {
-
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('Geocode failed');
-    const data = await res.json();
-    if (!data || !data.length) throw new Error('No results');
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    const params = new URLSearchParams({ q: query.trim() });
+    let lastError = null;
+    
+    // Retry up to 2 times with a 1-second delay
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const res = await fetch('/api/geocode?' + params.toString());
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                lastError = new Error(data.error || 'Geocoding service unavailable');
+                
+                // Don't retry on 404 (not found) or 400 (bad request)
+                if (res.status === 404 || res.status === 400) {
+                    throw lastError;
+                }
+                
+                // If this is the last attempt, throw the error
+                if (attempt === 2) {
+                    throw lastError;
+                }
+                
+                // Wait before retrying
+                console.log(`Geocoding retry ${attempt}/2 for "${query}"...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+            }
+            const data = await res.json();
+            return { lat: data.lat, lon: data.lon, display_name: data.display_name };
+        } catch (err) {
+            lastError = err;
+            if (attempt === 2) {
+                throw lastError;
+            }
+            console.log(`Geocoding retry ${attempt}/2 for "${query}" after error:`, err.message);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+    
+    throw lastError;
   }
 
   document.getElementById('geocodeBtn').addEventListener('click', async () => {
@@ -176,7 +296,11 @@
       pickupMarker.setLatLng(pickupLatLng);
       dropoffMarker.setLatLng(dropoffLatLng);
       map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
-
+      if (typeof renderRiderCards === 'function') {
+        const res = await fetch('/api/delivery_guys');
+        const data = await res.json();
+        renderRiderCards(data);
+      }
       setStatus('Locations set');
     } catch (e) {
       console.error(e);
@@ -194,11 +318,14 @@
 
       setStatus('Requesting delivery...');
 
+      const selectedRider = document.getElementById('selectedRiderId').value;
+      if (!selectedRider) throw new Error('Select an available rider before requesting delivery');
       const res = await fetch('/api/request_delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipient_id: parseInt(recipientId, 10),
+          rider_id: parseInt(selectedRider, 10),
           pickup_lat: pickupLatLng[0],
           pickup_lon: pickupLatLng[1],
           dropoff_lat: dropoffLatLng[0],
@@ -211,8 +338,13 @@
       if (!res.ok) throw new Error(data.error || 'Create delivery failed');
 
       setStatus('Delivery created: #' + data.delivery_id);
+      document.getElementById('deliveryId').value = data.delivery_id;
+      currentDeliveryId = data.delivery_id;
       // Let riderMarker update from live websocket.
-      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+      socket && socket.emit('join_delivery', { delivery_id: data.delivery_id });
+      loadDeliveryMessages(data.delivery_id);
+      enableChatControls(true);
+      updateDownloadReceiptButton(data.delivery_id, data.status || '');
     } catch (e) {
       console.error(e);
       setStatus('Error: ' + e.message);
@@ -220,15 +352,18 @@
     }
   });
 
-  document.getElementById('startRiderBtn').addEventListener('click', async () => {
-    try {
-      const deliveryId = document.getElementById('deliveryId').value.trim();
-      if (!deliveryId) throw new Error('Enter delivery ID');
-      const deliveryNum = parseInt(deliveryId, 10);
-      if (Number.isNaN(deliveryNum)) throw new Error('Invalid delivery ID');
+   document.getElementById('startRiderBtn').addEventListener('click', async () => {
+     try {
+       const deliveryId = document.getElementById('deliveryId').value.trim();
+       if (!deliveryId) throw new Error('Enter delivery ID');
+       const deliveryNum = parseInt(deliveryId, 10);
+       if (Number.isNaN(deliveryNum)) throw new Error('Invalid delivery ID');
 
-      setStatus('Starting live updates for delivery #' + deliveryNum);
-      socket.emit('join_delivery', { delivery_id: deliveryNum });
+       setStatus('Joining delivery room #' + deliveryNum);
+       socket && socket.emit('join_delivery', { delivery_id: deliveryNum });
+       currentDeliveryId = deliveryNum;
+       loadDeliveryMessages(deliveryNum);
+       enableChatControls(true);
 
       // Use browser geolocation
       if (!navigator.geolocation) throw new Error('Geolocation not supported');
@@ -247,7 +382,7 @@
         const now = Date.now();
         if (now - lastEmitTs >= EMIT_INTERVAL_MS) {
           lastEmitTs = now;
-          socket.emit('rider_location', {
+          socket && socket.emit('rider_location', {
             delivery_id: deliveryNum,
             lat: lat,
             lon: lon
@@ -273,7 +408,7 @@
   });
 
   // Socket listeners
-  socket.on('delivery_initial', (payload) => {
+  socket && socket.on('delivery_initial', (payload) => {
     // payload includes pickup/dropoff positions
     if (payload && payload.pickup_lat != null) {
       pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
@@ -289,13 +424,12 @@
     }
   });
 
-  socket.on('rider_location_update', (payload) => {
+  socket && socket.on('rider_location_update', (payload) => {
     if (!payload) return;
     if (payload.lat == null || payload.lon == null) return;
     const next = [payload.lat, payload.lon];
     riderMarker.setLatLng(next);
 
-  // Bolt-style: keep drawing the rider's traveled path while marker moves.
     if (pickupLatLng && dropoffLatLng) {
       // Main route (pickup -> dropoff) stays stable.
       updateRoutePolyline();
@@ -319,21 +453,267 @@
 
   });
 
+  socket && socket.on('delivery_new_message', (payload) => {
+    if (!payload || !payload.delivery_id) return;
+    if (currentDeliveryId && payload.delivery_id === currentDeliveryId) {
+      appendChatMessage(payload);
+    }
+  });
+
+  socket && socket.on('connect', () => {
+    ensureJoinDelivery();
+  });
+
+  socket && socket.on('reconnect', () => {
+    ensureJoinDelivery();
+  });
+
+  socket && socket.on('delivery_status_update', (payload) => {
+    if (!payload || !payload.delivery_id) return;
+    if (payload.delivery_id === currentDeliveryId || !currentDeliveryId) {
+      if (payload.delivery_id) {
+        currentDeliveryId = payload.delivery_id;
+        document.getElementById('deliveryId').value = payload.delivery_id;
+      }
+      updateDownloadReceiptButton(payload.delivery_id, payload.status || '');
+    }
+  });
+
+  document.getElementById('downloadReceiptBtn').addEventListener('click', downloadReceipt);
 
   // Load delivery guys
-  async function loadRiders() {
-    const res = await fetch('/api/delivery_guys');
-    const data = await res.json();
-    const sel = document.getElementById('rider');
+  function estimateEtaMinutes(distanceKm) {
+    const averageSpeedKmh = 30; // average local rider speed
+    return Math.max(1, Math.round((distanceKm / averageSpeedKmh) * 60));
+  }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const toRad = (deg) => deg * Math.PI / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function renderRiderCards(data) {
+    const cards = document.getElementById('riderCards');
+    const selectedInput = document.getElementById('selectedRiderId');
+    if (!cards || !selectedInput) return;
+    cards.innerHTML = '';
+    selectedInput.value = '';
+
+    if (!data.delivery_guys || !data.delivery_guys.length) {
+      cards.textContent = 'No riders available right now.';
+      return;
+    }
+
     data.delivery_guys.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.username;
-      sel.appendChild(opt);
+      const card = document.createElement('div');
+      card.className = 'rider-card' + (u.online ? '' : ' offline');
+      card.dataset.riderId = u.id;
+
+      const title = document.createElement('h4');
+      title.textContent = u.username;
+      card.appendChild(title);
+
+      const status = document.createElement('div');
+      status.className = 'meta';
+      status.innerHTML = `<span class="badge">${u.online ? 'Online' : 'Offline'}</span> ${u.last_seen_at ? 'Last seen ' + u.last_seen_at : 'No location available'}`;
+      card.appendChild(status);
+
+      let distanceHtml = '<div class="distance">Location unknown</div>';
+      if (pickupLatLng && u.last_lat != null && u.last_lon != null) {
+        const dist = haversine(u.last_lat, u.last_lon, pickupLatLng[0], pickupLatLng[1]);
+        const eta = estimateEtaMinutes(dist);
+        distanceHtml = `<div class="distance">${dist.toFixed(1)} km to pickup · ETA ${eta} min</div>`;
+      } else if (u.last_lat != null && u.last_lon != null) {
+        distanceHtml = `<div class="distance">Last known location available</div>`;
+      }
+      card.insertAdjacentHTML('beforeend', distanceHtml);
+
+      const selectButton = document.createElement('button');
+      selectButton.type = 'button';
+      selectButton.className = 'btn btn-sm btn-outline-primary';
+      selectButton.style.marginTop = '10px';
+      selectButton.textContent = u.online ? 'Select Rider' : 'Offline';
+      selectButton.disabled = !u.online;
+      selectButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.querySelectorAll('.rider-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedInput.value = u.id;
+        const selectedStatus = document.getElementById('selectedRiderStatus');
+        if (selectedStatus) {
+          selectedStatus.textContent = `Selected rider: ${u.username} (ID ${u.id})`;
+        }
+      });
+      card.appendChild(selectButton);
+
+      if (u.online) {
+        card.addEventListener('click', () => {
+          selectButton.click();
+        });
+      }
+
+      cards.appendChild(card);
     });
   }
 
+  async function loadRiders() {
+    const res = await fetch('/api/delivery_guys');
+    const data = await res.json();
+    renderRiderCards(data);
+    if (isRider && currentUserId != null && data.delivery_guys) {
+      const me = data.delivery_guys.find(u => u.id === currentUserId);
+      if (me) {
+        updateRiderAvailabilityUI(me.online);
+      }
+    }
+  }
+
+  function updateRiderAvailabilityUI(isOnline) {
+    const status = document.getElementById('riderOnlineStatus');
+    const toggle = document.getElementById('toggleOnlineBtn');
+    if (!status || !toggle) return;
+    if (isOnline) {
+      status.textContent = 'Online';
+      status.classList.add('online');
+      status.classList.remove('offline');
+      toggle.textContent = 'Go Offline';
+    } else {
+      status.textContent = 'Offline';
+      status.classList.add('offline');
+      status.classList.remove('online');
+      toggle.textContent = 'Go Live';
+    }
+  }
+
+  async function toggleRiderOnlineStatus() {
+    if (!isRider) return;
+    const status = document.getElementById('riderOnlineStatus');
+    const goingOnline = status && status.textContent.trim() !== 'Online';
+    try {
+      const res = await fetch('/api/rider/update_status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ online: goingOnline })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to update status');
+      updateRiderAvailabilityUI(data.online);
+      setStatus(data.online ? 'You are now online' : 'You are now offline');
+      await loadRiders();
+    } catch (err) {
+      console.error(err);
+      setStatus('Error updating rider availability');
+      alert(err.message);
+    }
+  }
+
+  function appendChatMessage(msg) {
+    const chatBox = document.getElementById('deliveryChatBox');
+    const empty = document.getElementById('deliveryChatEmpty');
+    if (!chatBox) return;
+    if (empty) empty.style.display = 'none';
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `<span class="sender">${msg.sender_username || 'User'}</span><div>${msg.content}</div><span class="chat-meta">${msg.created_at || ''}</span>`;
+    chatBox.appendChild(bubble);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  async function loadDeliveryMessages(deliveryId) {
+    try {
+      const res = await fetch('/api/delivery_messages/' + deliveryId);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to load chat');
+      const chatBox = document.getElementById('deliveryChatBox');
+      if (!chatBox) return;
+      chatBox.innerHTML = '';
+      if (!data.length) {
+        const empty = document.createElement('div');
+        empty.id = 'deliveryChatEmpty';
+        empty.className = 'muted';
+        empty.textContent = 'No chat messages yet. Start the conversation once the delivery room is joined.';
+        chatBox.appendChild(empty);
+        return;
+      }
+      data.forEach(appendChatMessage);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function sendDeliveryChatMessage() {
+    const deliveryIdField = document.getElementById('deliveryId');
+    const input = document.getElementById('deliveryChatInput');
+    if (!deliveryIdField || !input) return;
+    const deliveryId = deliveryIdField.value.trim();
+    const text = input.value.trim();
+    if (!deliveryId) return alert('Enter or create a delivery first.');
+    if (!text) return;
+
+    try {
+      const res = await fetch('/api/delivery_messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_id: parseInt(deliveryId, 10), content: text })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to send message');
+      input.value = '';
+      appendChatMessage(data.message);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  }
+
+  function enableChatControls(enabled) {
+    const input = document.getElementById('deliveryChatInput');
+    const button = document.getElementById('deliveryChatSendBtn');
+    if (input) {
+      input.disabled = !enabled;
+      input.placeholder = enabled ? 'Send a message to sender, rider, and recipient...' : 'Chat opens when delivery room is joined and rider has accepted.';
+    }
+    if (button) button.disabled = !enabled;
+  }
+
+  function joinChatRoom(deliveryId) {
+    currentDeliveryId = deliveryId;
+    socket && socket.emit('join_delivery', { delivery_id: deliveryId });
+    loadDeliveryMessages(deliveryId);
+    enableChatControls(true);
+  }
+
+  document.getElementById('findRiderBtn').addEventListener('click', async () => {
+    try {
+      setStatus('Refreshing riders...');
+      await loadRiders();
+      setStatus('Rider list updated');
+    } catch (err) {
+      console.error(err);
+      setStatus('Error refreshing riders');
+    }
+  });
+
+  document.getElementById('deliveryChatSendBtn').addEventListener('click', sendDeliveryChatMessage);
+  document.getElementById('deliveryChatInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      sendDeliveryChatMessage();
+    }
+  });
+
+  if (isRider) {
+    document.getElementById('toggleOnlineBtn').addEventListener('click', toggleRiderOnlineStatus);
+    document.getElementById('refreshStatusBtn').addEventListener('click', loadRiders);
+  }
+
   loadRiders();
+  enableChatControls(false);
 </script>
 {% endblock %}
 

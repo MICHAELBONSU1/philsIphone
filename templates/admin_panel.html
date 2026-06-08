@@ -36,7 +36,7 @@
         </div>
         
         <div class="admin-section">
-            <h3>Pending User Approvals</h3>
+            <h3>New Accounts Awaiting Posting Access</h3>
             {% if pending_users %}
             <table class="admin-table">
                 <thead>
@@ -54,18 +54,14 @@
                         <td>{{ user.email }}</td>
                         <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
                         <td>
-                            {% if user.can_post %}
-                            <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-danger">Revoke</a>
-                            {% else %}
-                            <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success">Approve</a>
-                            {% endif %}
+                            <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success">Approve Posting</a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             {% else %}
-            <p class="no-data">No pending users</p>
+            <p class="no-data">No new accounts awaiting posting access.</p>
             {% endif %}
         </div>
         
@@ -78,6 +74,7 @@
                         <th>Username</th>
                         <th>Email</th>
                         <th>Joined</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,12 +92,84 @@
                         </td>
                     </tr>
                     {% endfor %}
-                </tbody>
-            </table>
             {% else %}
             <p class="no-data">No approved sellers yet</p>
             {% endif %}
         </div>
+
+        <div class="admin-section">
+            <h3>Post Apple News</h3>
+            <form id="newsForm" style="display: flex; flex-direction: column; gap: 10px; max-width: 500px;">
+                <input type="text" id="newsTitle" placeholder="Title" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                <textarea id="newsContent" placeholder="Content" rows="3" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;"></textarea>
+                <input type="text" id="newsImageUrl" placeholder="Image URL (optional)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                <input type="text" id="newsVideoUrl" placeholder="Video URL (optional, .mp4 / .mov / .m3u8)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                <input type="text" id="newsSource" placeholder="Source (default: Phil's iPhone News)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                <button type="submit" class="btn btn-primary">Post News</button>
+            </form>
+            <div id="newsStatus" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="admin-section">
+            <h3>My Call History</h3>
+            {% if my_call_logs %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Caller</th>
+                        <th>Receiver</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Started</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for call in my_call_logs %}
+                    <tr>
+                        <td>{{ call.caller.username if call.caller else '—' }}</td>
+                        <td>{{ call.receiver.username if call.receiver else '—' }}</td>
+                        <td>{{ call.call_type|capitalize }}</td>
+                        <td>{{ call.status|capitalize }}</td>
+                        <td>{% if call.duration_seconds %}{{ call.duration_seconds }}s{% else %}—{% endif %}</td>
+                        <td>{{ call.started_at.strftime('%Y-%m-%d %H:%M') if call.started_at else '—' }}</td>
+                        <td>
+                            <a href="{{ url_for('admin_delete_call', call_id=call.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete call log #{{ call.id }}?');">Del</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No calls recorded yet</p>
+            {% endif %}
+        </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('newsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('newsTitle').value;
+    const content = document.getElementById('newsContent').value;
+    const image_url = document.getElementById('newsImageUrl').value || null;
+    const video_url = document.getElementById('newsVideoUrl').value || null;
+    const source = document.getElementById('newsSource').value || 'Phil\'s iPhone News';
+
+    const res = await fetch('/api/post_news', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, image_url, video_url, source, category: 'apple' })
+    });
+    const data = await res.json();
+    if (data.success) {
+        document.getElementById('newsStatus').innerHTML = '<span style="color: green;">News posted successfully!</span>';
+        document.getElementById('newsForm').reset();
+    } else {
+        document.getElementById('newsStatus').innerHTML = '<span style="color: red;">Error: ' + (data.error || 'Failed to post') + '</span>';
+    }
+});
+</script>
 {% endblock %}

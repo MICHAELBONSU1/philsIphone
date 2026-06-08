@@ -1,59 +1,56 @@
 // Phil's iPhone - Main JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Mobile menu toggle
-    const hamburger = document.querySelector('.hamburger');
-    const navMenu = document.querySelector('.nav-menu');
-    
-    if (hamburger) {
-        hamburger.addEventListener('click', function() {
-            // Mobile: animate side drop using CSS transform
-            const isOpen = navMenu.classList.contains('open');
-            navMenu.classList.toggle('open', !isOpen);
-            navMenu.style.display = 'block';
-            navMenu.style.transform = '';
+    // Initialize Socket.IO and External Notifications
+    if (typeof io !== 'undefined') {
+        const socket = window.globalSocket || io();
 
+        // Request permission for browser notifications on first user interaction.
+        // Modern browsers require a user gesture (click/tap) to show the permission prompt.
+        const initNotifications = () => {
+            if ("Notification" in window && Notification.permission === "default") {
+                Notification.requestPermission().then(permission => {
+                    console.log("Notification permission result:", permission);
+                });
+            }
+            document.removeEventListener('click', initNotifications);
+            document.removeEventListener('touchstart', initNotifications);
+        };
+
+        document.addEventListener('click', initNotifications, { passive: true });
+        document.addEventListener('touchstart', initNotifications, { passive: true });
+
+        // Handle incoming system notifications for background alerts
+        // Toast notifications are handled globally in templates/base.html
+        // (spawnNotification). Removing OS-level Notification(...) here prevents duplicate/"compromised"
+        // behavior and keeps system_notification handling consistent.
+        socket.on('system_notification', function(data) {
+            // no-op (toast handled in base.html)
         });
     }
-    
-    // User dropdown menu
+
+    // Navigation Elements
     const userMenu = document.querySelector('.user-menu');
     const dropdown = document.querySelector('.dropdown');
 
-    if (userMenu && dropdown) {
-        userMenu.addEventListener('click', function(e) {
-            // Toggle dropdown only when clicking the username area.
-            if (e.target.tagName === 'A' && e.target.href.includes('logout')) {
-                // Let logout link work normally.
-                return;
-            }
-
-            if (!dropdown) return;
-            e.preventDefault();
-            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    // Sidebar Contact Filter
+    const sidebarSearch = document.getElementById('sidebar-contact-search');
+    if (sidebarSearch) {
+        sidebarSearch.addEventListener('input', function(e) {
+            const filter = e.target.value.toLowerCase();
+            const contactButtons = document.querySelectorAll('.user-list .user-btn');
+            
+            contactButtons.forEach(btn => {
+                const name = btn.textContent.toLowerCase();
+                if (name.includes(filter)) {
+                    btn.style.display = 'flex';
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
         });
     }
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        // Guard: pages may not have these elements
-        if (!userMenu || !dropdown) return;
-        if (!userMenu.contains(e.target)) {
-            dropdown.style.display = 'none';
-        }
-    });
-    
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(function(alert) {
-        setTimeout(function() {
-            alert.style.opacity = '0';
-            setTimeout(function() {
-                alert.remove();
-            }, 300);
-        }, 5000);
-    });
-    
     // Filter URL parameter handling for index page
     const urlParams = new URLSearchParams(window.location.search);
     const category = urlParams.get('category');
@@ -66,7 +63,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
     // File upload click handling
     const fileUploadAreas = document.querySelectorAll('.file-upload');
     fileUploadAreas.forEach(function(uploadArea) {
@@ -89,20 +85,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Dark Mode Toggle
-    const themeToggle = document.querySelector('.theme-toggle');
+    const themeToggle = document.querySelector('#theme-toggle-btn') || document.querySelector('.theme-toggle');
     if (themeToggle) {
         // Load saved theme
         const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', savedTheme);
         
+
+
+
         themeToggle.addEventListener('click', function() {
+            // Tiny animation hook (CSS handles the actual animation)
+            themeToggle.classList.remove('theme-switching');
+            // Force reflow so animation re-triggers reliably
+            // eslint-disable-next-line no-unused-expressions
+            themeToggle.offsetWidth;
+            themeToggle.classList.add('theme-switching');
+
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             themeToggle.innerHTML = newTheme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+
+            // Cleanup class after animation completes
+            window.setTimeout(() => {
+                themeToggle.classList.remove('theme-switching');
+            }, 260);
         });
+
         // Set icon based on current theme
         themeToggle.innerHTML = savedTheme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
     }

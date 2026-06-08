@@ -35,6 +35,12 @@
                 <small class="text-muted">Pending Requests</small>
             </div>
         </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-dark text-white text-center p-3 almighty-stat-card">
+                <div class="h3 mb-0">{{ call_logs|length }}</div>
+                <small class="text-muted">Recent Calls</small>
+            </div>
+        </div>
     </div>
 
     <ul class="nav nav-pills mb-4 almighty-tabs shadow-sm p-2 rounded" id="almightyTabs" role="tablist">
@@ -42,6 +48,7 @@
         <li class="nav-item"><a class="nav-link" id="items-tab" data-bs-toggle="tab" href="#items" role="tab" aria-controls="items" aria-selected="false">Items</a></li>
         <li class="nav-item"><a class="nav-link" id="deliveries-tab" data-bs-toggle="tab" href="#deliveries" role="tab" aria-controls="deliveries" aria-selected="false">Deliveries</a></li>
         <li class="nav-item"><a class="nav-link" id="requests-tab" data-bs-toggle="tab" href="#requests" role="tab" aria-controls="requests" aria-selected="false">Requests</a></li>
+        <li class="nav-item"><a class="nav-link" id="calls-tab" data-bs-toggle="tab" href="#calls" role="tab" aria-controls="calls" aria-selected="false">Calls</a></li>
         <li class="nav-item"><a class="nav-link" id="messages-tab" data-bs-toggle="tab" href="#messages" role="tab" aria-controls="messages" aria-selected="false">Messages</a></li>
     </ul>
 
@@ -128,8 +135,8 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if not user.is_almighty %}
                                         <div class="btn-group btn-group-sm">
-                                            {% if not user.is_almighty %}
                                             <a href="{{ url_for('almighty_toggle_admin', user_id=user.id) }}" class="btn btn-outline-primary" title="Toggle Admin">Admin</a>
                                             {% if user.can_post %}
                                             <a href="{{ url_for('revoke_user', user_id=user.id) }}" class="btn btn-outline-warning">Revoke</a>
@@ -137,8 +144,8 @@
                                             <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-outline-success">Approve</a>
                                             {% endif %}
                                             <a href="{{ url_for('almighty_delete_user', user_id=user.id) }}" class="btn btn-danger" onclick="return confirm('Delete user?');">Del</a>
-                                            {% endif %}
                                         </div>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -151,6 +158,9 @@
 
         <div class="tab-pane fade" id="items" role="tabpanel" aria-labelledby="items-tab">
             <h2>All Items</h2>
+            <div class="mb-3">
+                <a href="{{ url_for('almighty_delete_all_users') }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete ALL non-almighty users? This cannot be undone!');">Delete All Non-Almighty Users</a>
+            </div>
             {% if items|length == 0 %}
                 <div class="almighty-empty mt-3">No items found.</div>
             {% else %}
@@ -224,6 +234,9 @@
 
         <div class="tab-pane fade" id="deliveries" role="tabpanel" aria-labelledby="deliveries-tab">
             <h2>All Deliveries</h2>
+            <div class="mb-3">
+                <a href="{{ url_for('almighty_delete_all_deliveries') }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete ALL deliveries, updates, and messages? This cannot be undone!');">Delete All Deliveries</a>
+            </div>
             {% if deliveries|length == 0 %}
                 <div class="almighty-empty mt-3">No deliveries found.</div>
             {% else %}
@@ -306,6 +319,9 @@
 
         <div class="tab-pane fade" id="requests" role="tabpanel" aria-labelledby="requests-tab">
             <h2>All Posting Requests</h2>
+            <div class="mb-3">
+                <a href="{{ url_for('almighty_delete_all_requests') }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete ALL posting requests? This cannot be undone!');">Delete All Requests</a>
+            </div>
             {% if requests|length == 0 %}
                 <div class="almighty-empty mt-3">No requests found.</div>
             {% else %}
@@ -341,8 +357,112 @@
             {% endif %}
         </div>
 
+        <div class="tab-pane fade" id="calls" role="tabpanel" aria-labelledby="calls-tab">
+            <h2>Call Logs</h2>
+            <div class="mb-3">
+                <a href="{{ url_for('almighty_delete_all_calls') }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete ALL call logs? This cannot be undone!');">Delete All Call Logs</a>
+            </div>
+            {% if call_logs|length == 0 %}
+                <div class="almighty-empty mt-3">No calls recorded yet.</div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Caller</th>
+                            <th>Receiver</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                            <th>Started</th>
+                            <th>Ended</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for call in call_logs %}
+                        <tr>
+                            <td>{{ call.id }}</td>
+                            <td>{{ call.caller.username if call.caller else 'Unknown' }}</td>
+                            <td>{{ call.receiver.username if call.receiver else 'Unknown' }}</td>
+                            <td>
+                                <span class="badge {% if call.call_type == 'video' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ call.call_type|capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge {% if call.status == 'ended' %}bg-success{% elif call.status == 'answered' %}bg-info{% elif call.status == 'missed' or call.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                    {{ call.status|capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if call.duration_seconds %}{{ call.duration_seconds }}s{% else %}—{% endif %}
+                            </td>
+                            <td>{{ call.started_at.strftime('%Y-%m-%d %H:%M') if call.started_at else '—' }}</td>
+                            <td>{{ call.ended_at.strftime('%Y-%m-%d %H:%M') if call.ended_at else '—' }}</td>
+                            <td>
+                                <a href="{{ url_for('almighty_delete_call', call_id=call.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete call log #{{ call.id }}?');">Del</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Call Summary</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Caller</th>
+                                    <th>Receiver</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for call in call_logs %}
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold">{{ call.caller.username if call.caller else 'Unknown' }}</span>
+                                    </td>
+                                    <td>{{ call.receiver.username if call.receiver else 'Unknown' }}</td>
+                                    <td>
+                                        <span class="badge {% if call.call_type == 'video' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                            {{ call.call_type|capitalize }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if call.status == 'ended' %}bg-success{% elif call.status == 'answered' %}bg-info{% elif call.status == 'missed' or call.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                            {{ call.status|capitalize }}
+                                        </span>
+                                    </td>
+                                    <td>{% if call.duration_seconds %}{{ call.duration_seconds }}s{% else %}—{% endif %}</td>
+                                    <td class="small">{{ call.started_at.strftime('%m/%d %H:%M') if call.started_at else '—' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('almighty_delete_call', call_id=call.id) }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete call log #{{ call.id }}?');">Del</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="tab-pane fade" id="messages" role="tabpanel" aria-labelledby="messages-tab">
             <h2>All System Messages</h2>
+            <div class="mb-3">
+                <a href="{{ url_for('almighty_delete_all_messages') }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to hard-delete ALL messages? This cannot be undone!');">Delete All Messages</a>
+            </div>
             {% if messages|length == 0 %}
                 <div class="almighty-empty mt-3">No messages found.</div>
             {% else %}

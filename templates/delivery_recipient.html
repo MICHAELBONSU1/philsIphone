@@ -24,10 +24,52 @@
 
   .approval-anim { animation: fadeSlideIn 260ms ease-out; }
   .code-hint-pulse { animation: uiPulse 900ms ease-in-out infinite; }
+  .delivery-banner {
+    margin: 16px 0;
+    padding: 18px 20px;
+    border-radius: 14px;
+    background: #fff7db;
+    color: #6d4c1c;
+    font-weight: 700;
+    text-align: center;
+    border: 1px solid #f4d06f;
+    box-shadow: 0 3px 16px rgba(0,0,0,0.06);
+  }
   @keyframes fadeSlideIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100%); }
+  }
+  .sys-note {
+    position: fixed; top: 20px; right: 20px; z-index: 10000;
+    background: #ffffff; color: #333; padding: 16px 24px;
+    border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    min-width: 280px; animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border-left: 6px solid #2f80ed; pointer-events: none;
+  }
+  .sys-note.note-message { border-left-color: #27ae60; }
+  .sys-note strong { display: block; color: #2f80ed; margin-bottom: 4px; font-size: 1rem; }
+  .sys-note.note-message strong { color: #27ae60; }
+  .sys-note small { color: #666; font-size: 0.85rem; }
+  .toast-closing {
+    animation: toastOut 0.4s forwards;
+  }
+
+  /* Chat Styles */
+  #delivery-chat-box { scroll-behavior: smooth; display: flex; flex-direction: column; }
+  .msg-bubble { padding: 8px 12px; border-radius: 15px; max-width: 80%; margin-bottom: 10px; position: relative; font-size: 0.9rem; }
+  .msg-sent { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .msg-received { background: #ffffff; align-self: flex-start; border-bottom-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .msg-meta { font-size: 0.65rem; opacity: 0.6; display: block; margin-top: 4px; text-align: right; }
+  .msg-sender { font-weight: bold; font-size: 0.7rem; margin-bottom: 2px; display: block; color: #555; }
 </style>
 {% endblock %}
 
@@ -35,14 +77,15 @@
 <div class="container" data-user-id="{{ session.get('user_id', 0) }}">
   <div class="panel" style="margin-bottom:20px;">
     <h2 style="margin-bottom:8px;">Delivery (Recipient)</h2>
-    <p class="muted">Approve incoming requests and track the rider live.</p>
+    <p class="muted">Approve an incoming request and follow rider updates live.</p>
+    <div id="deliveryBanner" class="delivery-banner" style="display:none;">Ride us with START — your delivery is tracking live.</div>
   </div>
 
   <div class="delivery-layout">
     <div class="panel">
       <h3 style="margin-bottom:14px;">Tracking</h3>
 
-      <p class="muted" style="margin-top:0;">Updates are pushed to your room: <b>user:{recipient_id}</b></p>
+      <p class="muted" style="margin-top:0;">Updates are pushed to your room: <b>user:{{ session.get('user_id', 0) }}</b></p>
 
       <div class="field">
         <label for="deliveryId">Active Delivery ID</label>
@@ -50,21 +93,55 @@
       </div>
 
       <div class="btn-row">
-        <button id="approveBtn" class="btn btn-primary" style="display:none;"><i class="fas fa-check"></i> Approve Delivery</button>
-        <button id="handoverAckBtn" class="btn btn-success" disabled>Handover Confirmed (UI)</button>
-        <button id="paidAckBtn" class="btn btn-warning" disabled>Paid (UI)</button>
+        <button id="approveBtn" type="button" class="btn btn-primary" disabled title="Enter approval code first"><i class="fas fa-check"></i> Approve Delivery</button>
+        <button id="handoverAckBtn" type="button" class="btn btn-success" disabled>Confirm Handover</button>
+        <button id="paidAckBtn" type="button" class="btn btn-warning" disabled>Paid (UI)</button>
+        <button id="downloadReceiptBtn" type="button" class="btn btn-info" disabled style="display:none;">Download Receipt</button>
       </div>
 
       <div class="field" style="margin-top:12px;">
         <label for="approvalCodeInput">Approval Code (from sender)</label>
         <div style="display:flex; gap:10px; align-items:center;">
-          <input id="approvalCodeInput" placeholder="Enter code" style="flex:1;" />
-          <button id="copyCodeBtn" class="btn btn-primary" type="button" style="display:none;">Copy</button>
+          <input id="approvalCodeInput" placeholder="Enter code" style="flex:1;" autocomplete="off" />
+          <button id="copyCodeBtn" class="btn btn-secondary" type="button" style="display:none;">Copy</button>
         </div>
         <p class="muted approval-anim" style="margin-top:8px;" id="approvalHint">Enter the code from the sender.</p>
       </div>
 
       <p class="muted" style="margin-top:12px;" id="status">Status: idle</p>
+
+      <!-- 3-Party Chat UI -->
+      <div id="delivery-chat-card" class="card shadow-sm mb-4" style="display:none; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: white;">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
+            <h6 class="mb-0" style="color:white;"><i class="fas fa-comments me-2"></i>Delivery Chat (3-Party)</h6>
+            <span id="chat-lock-badge" class="badge bg-warning text-dark">Locked</span>
+        </div>
+        <div id="delivery-chat-box" class="card-body" style="height: 250px; overflow-y: auto; background: #e5ddd5; padding: 15px;">
+            <!-- Messages appear here -->
+        </div>
+        <div class="card-footer bg-light p-2">
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="chat-msg-input" class="form-control" style="flex: 1; border-radius: 20px; padding: 8px 15px;" placeholder="Wait for rider..." disabled>
+                <button id="chat-send-btn" class="btn btn-primary" style="border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" disabled><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+      </div>
+
+      <div class="delivery-widgets" style="display:grid; gap:10px; margin-top:20px;">
+        <div class="eta-widget" style="background:#f9f9f9; padding:14px; border-radius:12px;">
+          <div class="eta-title"><i class="fas fa-clock"></i> ETA (GPS)</div>
+          <div class="eta-value" id="etaValue">—</div>
+          <div class="eta-sub" id="etaSub">Waiting for rider GPS...</div>
+        </div>
+
+        <div class="notifications-center" style="background:#f9f9f9; padding:14px; border-radius:12px;">
+          <div class="notif-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="notif-title"><i class="fas fa-bell"></i> Notifications</div>
+            <div class="notif-count" id="notifCount">0</div>
+          </div>
+          <div class="notif-list" id="notifList"><div class="notif-empty">No updates yet.</div></div>
+        </div>
+      </div>
 
       <hr style="margin:18px 0;" />
 
@@ -72,8 +149,7 @@
       <div class="timeline" id="timeline"></div>
 
       <p class="muted" style="margin-top:12px;">
-        Note: handover + payment actions are driven by the <b>driver</b> in this MVP.
-        These buttons are informational for the recipient UI.
+        Note: handover + payment actions are informational in this recipient UI.
       </p>
     </div>
 
@@ -87,247 +163,521 @@
 
 {% block extra_js %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  const socket = io();
-
-  const map = L.map('map').setView([5.6037, -0.1870], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
-  let pickupLatLng = null;
-  let dropoffLatLng = null;
-
-  const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  pickupMarker.bindTooltip('Pickup (A)');
-
-  const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  dropoffMarker.bindTooltip('Dropoff (B)');
-
-  const riderMarker = L.marker([5.6037, -0.1870]).addTo(map);
-  riderMarker.bindTooltip('Rider (R)');
-
-  let routePolyline = null;
-  let trackingPolyline = null;
-
-  function setStatus(msg) {
-    document.getElementById('status').textContent = 'Status: ' + msg;
-  }
-
-  function renderTimeline(payload) {
-    const el = document.getElementById('timeline');
-    if (!el) return;
-
-    const rows = [
-      ['status', payload && payload.status ? payload.status : 'unknown'],
-      ['matched_at', payload && payload.matched_at ? payload.matched_at : ''],
-      ['accepted_at', payload && payload.accepted_at ? payload.accepted_at : ''],
-      ['handover_confirmed_at', payload && payload.handover_confirmed_at ? payload.handover_confirmed_at : ''],
-      ['paid_at', payload && payload.paid_at ? payload.paid_at : ''],
-    ];
-
-    el.innerHTML = '';
-    for (const [k, v] of rows) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.innerHTML = `<span>${k}</span><span>${v || '-'}</span>`;
-      el.appendChild(row);
-    }
-  }
-
-  function updateRoutePolyline() {
-    if (!pickupLatLng || !dropoffLatLng) return;
-    const now = Date.now();
-    if (!updateRoutePolyline.lastFetchTs) updateRoutePolyline.lastFetchTs = 0;
-    if (now - updateRoutePolyline.lastFetchTs < 60000) return;
-    updateRoutePolyline.lastFetchTs = now;
-
-    const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson&steps=false`;
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return;
-        const coords = data.routes[0].geometry.coordinates;
-        const latlngs = coords.map(c => [c[1], c[0]]);
-
-        if (routePolyline) {
-          routePolyline.setLatLngs(latlngs);
-        } else {
-          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
-        }
-      })
-      .catch(() => {});
-  }
-
-  socket.on('connect', () => {
-    setStatus('connected');
-    const container = document.querySelector('.container[data-user-id]');
-    const userId = container ? Number(container.dataset.userId) : 0;
-    if (userId) socket.emit('join_user', { user_id: userId });
-  });
-
-  socket.on('delivery_initial', (payload) => {
-    if (payload && payload.pickup_lat != null) {
-      pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
-      pickupMarker.setLatLng(pickupLatLng);
-    }
-    if (payload && payload.dropoff_lat != null) {
-      dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
-      dropoffMarker.setLatLng(dropoffLatLng);
-    }
-    if (pickupLatLng && dropoffLatLng) {
-      map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [20, 20] });
-    }
-    renderTimeline(payload);
-    
-    // Show/Hide approve button based on state
-    const approveBtn = document.getElementById('approveBtn');
-    if (payload.status === 'pending_recipient') {
-        approveBtn.style.display = 'block';
-    }
-  });
-
-  socket.on('delivery_status_update', (payload) => {
-    if (!payload) return;
-
+  window.addEventListener('DOMContentLoaded', () => {
+    // Socket provided by base.html; guard null for offline/CDN-miss
+    var socket = window.globalSocket || (window.io ? window.io() : null);
+    if (!socket) { console.warn('[delivery_recipient] socket.io unavailable'); }
     const deliveryIdInput = document.getElementById('deliveryId');
-    if (payload.delivery_id && deliveryIdInput.value && String(deliveryIdInput.value) !== String(payload.delivery_id)) {
-      return;
-    }
-
-    if (payload.delivery_id && !deliveryIdInput.value) {
-      deliveryIdInput.value = String(payload.delivery_id);
-      // Join tracking room to receive rider_location_update
-      socket.emit('join_delivery', { delivery_id: payload.delivery_id });
-    }
-
-    setStatus('status updated: ' + (payload.status || 'unknown'));
-    renderTimeline(payload);
-
-    const handoverBtn = document.getElementById('handoverAckBtn');
-    const paidBtn = document.getElementById('paidAckBtn');
+    const userId = Number(document.querySelector('.container')?.dataset.userId || 0);
+    const approvalCodeInput = document.getElementById('approvalCodeInput');
     const approveBtn = document.getElementById('approveBtn');
+    const copyCodeBtn = document.getElementById('copyCodeBtn');
+    const approvalHint = document.getElementById('approvalHint');
+    const statusEl = document.getElementById('status');
 
-    if (payload.status === 'pending_recipient') {
-      approveBtn.style.display = 'block';
-    } else {
-      approveBtn.style.display = 'none';
+    // Map and Marker Initialization (Consolidated at the top)
+    const map = L.map('map').setView([5.6037, -0.1870], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+        maxZoom: 19, 
+        attribution: '&copy; OpenStreetMap contributors' 
+    }).addTo(map);
+    const pickupMarker = L.marker([5.6037, -0.1870]).addTo(map).bindTooltip('Pickup (A)');
+    const dropoffMarker = L.marker([5.6037, -0.1870]).addTo(map).bindTooltip('Dropoff (B)');
+    const riderMarker = L.marker([5.6037, -0.1870]).addTo(map).bindTooltip('Rider (R)');
+
+    const notifList = document.getElementById('notifList');
+    const notifCount = document.getElementById('notifCount');
+    const timelineEl = document.getElementById('timeline');
+    const etaValue = document.getElementById('etaValue');
+    const etaSub = document.getElementById('etaSub');
+
+    let pickupLatLng = null;
+    let dropoffLatLng = null;
+    let routePolyline = null;
+    let trackingPolyline = null;
+    let etaState = { lastFixTs: null, lastLat: null, lastLon: null, emaSpeedKmh: null };
+
+    function setStatus(message, isError = false) {
+      if (!statusEl) return;
+      statusEl.textContent = 'Status: ' + message;
+      statusEl.style.color = isError ? '#c0392b' : '#333';
     }
 
-    if (payload.status === 'roadside_handover') {
-      handoverBtn.disabled = false;
-    }
-    if (payload.status === 'paid') {
-      paidBtn.disabled = false;
-    }
-  });
-
-  socket.on('rider_location_update', (payload) => {
-    if (!payload) return;
-    if (payload.lat == null || payload.lon == null) return;
-
-    const next = [payload.lat, payload.lon];
-    riderMarker.setLatLng(next);
-
-    if (pickupLatLng && dropoffLatLng) {
-      updateRoutePolyline();
-
-      if (!trackingPolyline) {
-        trackingPolyline = L.polyline([next], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+    function updateDownloadReceiptButton(deliveryId, status) {
+      const btn = document.getElementById('downloadReceiptBtn');
+      if (!btn) return;
+      if (deliveryId && ['paid', 'roadside_handover'].includes(status)) {
+        btn.dataset.deliveryId = deliveryId;
+        btn.disabled = false;
+        btn.style.display = 'inline-flex';
+      } else if (deliveryId) {
+        btn.dataset.deliveryId = deliveryId;
+        btn.disabled = true;
+        btn.style.display = 'inline-flex';
       } else {
-        const latlngs = trackingPolyline.getLatLngs();
-        const last = latlngs.length ? latlngs[latlngs.length - 1] : null;
-        const dist = last ? map.distance(L.latLng(last.lat, last.lng), L.latLng(next[0], next[1])) : Infinity;
-        if (dist < 8) return;
-        latlngs.push(L.latLng(next[0], next[1]));
-        trackingPolyline.setLatLngs(latlngs);
+        btn.removeAttribute('data-delivery-id');
+        btn.disabled = true;
+        btn.style.display = 'none';
       }
     }
-  });
 
-  function updateApprovalUi() {
-    const input = document.getElementById('approvalCodeInput');
-    const copyBtn = document.getElementById('copyCodeBtn');
-    const hint = document.getElementById('approvalHint');
-    if (!input) return;
-
-    const code = (input.value || '').trim();
-    if (copyBtn) copyBtn.style.display = code ? 'inline-flex' : 'none';
-
-    if (hint) {
-      hint.textContent = code ? 'Code entered. You can approve now.' : 'Enter the code from the sender.';
-      if (code) hint.classList.remove('code-hint-pulse');
-      else hint.classList.add('code-hint-pulse');
-    }
-  }
-
-  document.getElementById('approvalCodeInput').addEventListener('input', updateApprovalUi);
-
-  document.getElementById('copyCodeBtn').addEventListener('click', async () => {
-    const input = document.getElementById('approvalCodeInput');
-    const code = (input && input.value ? String(input.value) : '').trim();
-    if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code);
-      setStatus('Code copied.');
-    } catch (e) {
-      alert('Copy this code: ' + code);
-    }
-  });
-
-  document.getElementById('approveBtn').addEventListener('click', async () => {
-    const deliveryId = document.getElementById('deliveryId').value;
-    const approvalCode = (document.getElementById('approvalCodeInput').value || '').trim();
-
-    if (!deliveryId) return;
-    if (!approvalCode) {
-      alert('Enter the approval code first.');
-      return;
+    function downloadReceipt() {
+      const btn = document.getElementById('downloadReceiptBtn');
+      if (!btn || !btn.dataset.deliveryId) return;
+      window.location.href = `/delivery/${btn.dataset.deliveryId}/receipt/download`;
     }
 
-    try {
-      const res = await fetch('/api/recipient_approve_delivery', {
+    function showDeliveryBanner(text) {
+      const banner = document.getElementById('deliveryBanner');
+      if (!banner) return;
+      banner.textContent = text;
+      banner.style.display = 'block';
+    }
+
+    function hideDeliveryBanner() {
+      const banner = document.getElementById('deliveryBanner');
+      if (!banner) return;
+      banner.style.display = 'none';
+    }
+
+    function updateDeliveryBanner(payload) {
+      if (!payload) return;
+      if (payload.status === 'paid') {
+        showDeliveryBanner('Right us with START — delivery is complete!');
+      } else if (['accepted', 'arrived_at_pickup', 'picked_up', 'arrived_at_dropoff', 'en_route', 'roadside_handover'].includes(payload.status)) {
+        showDeliveryBanner('Ride us with START — tracking the rider live now.');
+      } else {
+        hideDeliveryBanner();
+      }
+    }
+
+    function spawnNotification(title, message, type = 'info') {
+      if (!document.body) return;
+      const container = document.createElement('div');
+      container.className = `sys-note note-${type}`;
+      container.innerHTML = `<strong>${title}</strong><small>${message}</small>`;
+      document.body.appendChild(container);
+      notifySound.play().catch(() => {});
+      setTimeout(() => {
+        container.classList.add('toast-closing');
+        setTimeout(() => container.remove(), 400);
+      }, 5000);
+    }
+
+    function addNotification(title, message) {
+      if (!notifList || !notifCount) return;
+      if (notifList.querySelector('.notif-empty')) {
+        notifList.innerHTML = '';
+      }
+      const row = document.createElement('div');
+      row.className = 'notif-item';
+      row.style.marginBottom = '10px';
+      row.innerHTML = `<div style="font-weight:600">${title}</div><div>${message}</div><div style="font-size:12px;color:#777;">${new Date().toLocaleTimeString()}</div>`;
+      notifList.prepend(row);
+      notifCount.textContent = String(Math.min(30, notifList.children.length));
+      if (notifList.children.length > 30) {
+        notifList.removeChild(notifList.lastChild);
+      }
+    }
+
+    function renderTimeline(payload) {
+      if (!timelineEl) return;
+      const rows = [
+        ['Status', payload?.status || 'unknown'],
+        ['Matched', payload?.matched_at || '-'],
+        ['Accepted', payload?.accepted_at || '-'],
+        ['Arrived pickup', payload?.arrived_at_pickup_at || '-'],
+        ['Picked up', payload?.picked_up_at || '-'],
+        ['Arrived dropoff', payload?.arrived_at_dropoff_at || '-'],
+        ['Handover', payload?.handover_confirmed_at || '-'],
+        ['Paid', payload?.paid_at || '-'],
+      ];
+      timelineEl.innerHTML = '';
+      rows.forEach(([label, value]) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `<span>${label}</span><span>${value}</span>`;
+        timelineEl.appendChild(row);
+      });
+    }
+
+    function updateApprovalUi() {
+      const code = (approvalCodeInput?.value || '').trim();
+      if (copyCodeBtn) {
+        copyCodeBtn.style.display = code ? 'inline-flex' : 'none';
+      }
+      if (approvalHint) {
+        approvalHint.textContent = code ? 'Code entered. You can approve now.' : 'Enter the code from the sender.';
+        approvalHint.classList.toggle('code-hint-pulse', !code);
+      }
+      if (approveBtn) {
+        approveBtn.disabled = !code;
+        approveBtn.title = code ? 'Approve delivery' : 'Enter approval code first';
+      }
+    }
+
+    function setDeliveryId(value) {
+      if (!deliveryIdInput) return;
+      deliveryIdInput.value = value ?? '';
+    }
+
+    function ensureJoinDelivery() {
+      if (!socket?.connected || !deliveryIdInput?.value) return;
+      const id = Number(deliveryIdInput.value);
+      if (!Number.isFinite(id) || id <= 0) return;
+      socket && socket.emit('join_delivery', { delivery_id: id });
+    }
+
+    function safeNumber(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formatMinutes(mins) {
+      if (!isFinite(mins) || mins < 0) return '—';
+      if (mins < 1) return '<1 min';
+      return `${Math.round(mins)} min`;
+    }
+
+    function updateEtaFromGps(lat, lon, ts) {
+      if (!etaValue || !etaSub) return;
+      if (!dropoffLatLng) {
+        etaValue.textContent = '—';
+        etaSub.textContent = 'Waiting for rider GPS...';
+        return;
+      }
+      const dToDropKm = haversineKm(lat, lon, dropoffLatLng[0], dropoffLatLng[1]);
+      if (etaState.lastFixTs == null) {
+        etaState.lastFixTs = ts;
+        etaState.lastLat = lat;
+        etaState.lastLon = lon;
+        etaValue.textContent = '—';
+        etaSub.textContent = 'Calculating ETA...';
+        return;
+      }
+      const dtHours = (ts - etaState.lastFixTs) / 3600000;
+      if (dtHours <= 0) return;
+      const distKm = haversineKm(etaState.lastLat, etaState.lastLon, lat, lon);
+      const speedKmh = distKm / dtHours;
+      if (distKm < 0.01 && speedKmh < 5) {
+        etaState.lastFixTs = ts;
+        etaState.lastLat = lat;
+        etaState.lastLon = lon;
+        etaSub.textContent = 'Waiting for consistent movement...';
+        return;
+      }
+      const alpha = 0.35;
+      etaState.emaSpeedKmh = etaState.emaSpeedKmh == null ? speedKmh : alpha * speedKmh + (1 - alpha) * etaState.emaSpeedKmh;
+      const etaHours = etaState.emaSpeedKmh > 1 ? dToDropKm / etaState.emaSpeedKmh : null;
+      etaValue.textContent = formatMinutes(etaHours == null ? NaN : etaHours * 60);
+      etaSub.textContent = `Based on live GPS · ~${dToDropKm.toFixed(1)} km left`;
+      etaState.lastFixTs = ts;
+      etaState.lastLat = lat;
+      etaState.lastLon = lon;
+    }
+
+    function syncDeliveryState() {
+      return fetch('/api/recipient_pending_delivery')
+        .then(res => res.json())
+        .then(data => {
+          if (!data) return;
+          if (data.delivery_id) {
+            setDeliveryId(data.delivery_id);
+            ensureJoinDelivery();
+          }
+          if (data.approval_code) {
+            approvalCodeInput.value = String(data.approval_code);
+          }
+          updateApprovalUi();
+          if (data.status) {
+            applyDeliveryPayload(data);
+          }
+        })
+        .catch(() => {
+          setStatus('Could not sync delivery at load.', true);
+        });
+    }
+
+    function applyDeliveryPayload(payload) {
+      if (!payload) return;
+      if (payload.delivery_id && !deliveryIdInput.value) {
+        setDeliveryId(payload.delivery_id);
+        ensureJoinDelivery();
+      }
+      if (payload.pickup_lat != null && payload.pickup_lon != null) {
+        pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
+        pickupMarker.setLatLng(pickupLatLng);
+      }
+      if (payload.dropoff_lat != null && payload.dropoff_lon != null) {
+        dropoffLatLng = [payload.dropoff_lat, payload.dropoff_lon];
+        dropoffMarker.setLatLng(dropoffLatLng);
+      }
+      if (pickupLatLng && dropoffLatLng) {
+        map.fitBounds(L.latLngBounds(pickupLatLng, dropoffLatLng), { padding: [24, 24] });
+        updateRoutePolyline();
+      }
+      renderTimeline(payload);
+      if (payload.approval_code && !approvalCodeInput.value) {
+        approvalCodeInput.value = String(payload.approval_code);
+      }
+      updateApprovalUi();
+      if (payload.status) {
+        setStatus(`Delivery status: ${payload.status}`);
+      }
+      if (['arrived_at_dropoff', 'roadside_handover'].includes(payload.status) && document.getElementById('handoverAckBtn')) {
+        document.getElementById('handoverAckBtn').disabled = false;
+      }
+      if (payload.status === 'paid' && document.getElementById('paidAckBtn')) {
+        document.getElementById('paidAckBtn').disabled = false;
+      }
+      updateDeliveryBanner(payload);
+      updateDownloadReceiptButton(payload.delivery_id || deliveryIdInput.value, payload.status);
+      addNotification('Delivery update', `Status → ${payload.status || 'unknown'}`);
+      initDeliveryChat(payload.delivery_id || deliveryIdInput.value, payload.status);
+    }
+
+    // --- 3-Party Delivery Chat Logic ---
+    let chatInitialized = false;
+    function initDeliveryChat(deliveryId, status) {
+      if (!deliveryId) return;
+      const card = document.getElementById('delivery-chat-card');
+      const input = document.getElementById('chat-msg-input');
+      const btn = document.getElementById('chat-send-btn');
+      const badge = document.getElementById('chat-lock-badge');
+
+      card.style.display = 'block';
+      
+      const unlockedStatuses = ['accepted', 'arrived_at_pickup', 'picked_up', 'en_route', 'arrived_at_dropoff', 'roadside_handover', 'paid'];
+      const isUnlocked = unlockedStatuses.includes(status);
+
+      if (isUnlocked) {
+         input.disabled = false;
+         btn.disabled = false;
+         input.placeholder = "Message rider & sender...";
+         badge.innerText = "Active";
+         badge.className = "badge bg-success text-white";
+         
+         if (!chatInitialized) {
+            loadChatHistory(deliveryId);
+            chatInitialized = true;
+         }
+      } else {
+         input.disabled = true;
+         btn.disabled = true;
+         input.placeholder = "Locked until rider accepts...";
+         badge.innerText = "Locked";
+         badge.className = "badge bg-warning text-dark";
+      }
+    }
+
+    async function loadChatHistory(deliveryId) {
+      try {
+         const resp = await fetch(`/api/delivery_messages/${deliveryId}`);
+         const msgs = await resp.json();
+         const box = document.getElementById('delivery-chat-box');
+         box.innerHTML = '';
+         msgs.forEach(appendDeliveryMessage);
+      } catch (e) { console.error("Chat history load failed", e); }
+    }
+
+    function appendDeliveryMessage(msg) {
+      const box = document.getElementById('delivery-chat-box');
+      const isMe = Number(msg.sender_id) === userId;
+      
+      let contentHtml = (msg.content || '').trim() ? `<span class="msg-text">${msg.content}</span>` : '';
+      if (msg.media_url) {
+          if (msg.media_type === 'image') {
+              contentHtml += `<img src="/messages_uploads/${encodeURIComponent(msg.media_url)}" class="message-media" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
+          } else if (msg.media_type === 'video') {
+              contentHtml += `<video src="/messages_uploads/${msg.media_url}" class="message-media" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
+          } else if (msg.media_type === 'audio') {
+              contentHtml += `<audio src="/messages_uploads/${msg.media_url}" controls style="width: 100%; margin-top: 5px;"></audio>`;
+          }
+      }
+
+      const div = document.createElement('div');
+      div.className = `msg-bubble ${isMe ? 'msg-sent' : 'msg-received'}`;
+      div.innerHTML = `
+         <span class="msg-sender">${isMe ? 'You' : msg.sender_username}</span>
+         ${contentHtml}
+         <span class="msg-meta">${msg.created_at}</span>
+      `;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    document.getElementById('chat-send-btn').onclick = async () => {
+      const input = document.getElementById('chat-msg-input');
+      const content = input.value.trim();
+      const dId = deliveryIdInput.value;
+      if (!content || !dId) return;
+
+      const resp = await fetch('/api/delivery_messages/send', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ delivery_id: dId, content: content })
+      });
+      if (resp.ok) input.value = '';
+    };
+
+    socket && socket.on('delivery_new_message', (data) => {
+      if (data.delivery_id == deliveryIdInput.value) appendDeliveryMessage(data);
+    });
+
+    function updateRoutePolyline() {
+      if (!pickupLatLng || !dropoffLatLng) return;
+      const now = Date.now();
+      if (updateRoutePolyline.lastTs && now - updateRoutePolyline.lastTs < 30000) return;
+      updateRoutePolyline.lastTs = now;
+      const url = `https://router.project-osrm.org/route/v1/driving/${pickupLatLng[1]},${pickupLatLng[0]};${dropoffLatLng[1]},${dropoffLatLng[0]}?overview=full&geometries=geojson`;
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          if (!data?.routes?.[0]?.geometry?.coordinates) return;
+          const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+          if (routePolyline) routePolyline.setLatLngs(latlngs);
+          else routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+        })
+        .catch(() => {});
+    }
+
+    function handleApprove() {
+      const deliveryId = safeNumber(deliveryIdInput.value);
+      const approvalCode = (approvalCodeInput.value || '').trim();
+      if (!deliveryId) {
+        setStatus('No active delivery found.', true);
+        return;
+      }
+      if (!approvalCode) {
+        setStatus('Enter the approval code first.', true);
+        return;
+      }
+      setStatus('Sending approval...');
+      fetch('/api/recipient_approve_delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          delivery_id: parseInt(deliveryId, 10),
-          approval_code: approvalCode
+        body: JSON.stringify({ delivery_id: deliveryId, approval_code: approvalCode })
+      })
+        .then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const message = data.error || 'Approval failed';
+            setStatus(message, true);
+            throw new Error(message);
+          }
+          setStatus('Approved. Waiting for rider.');
+          addNotification('Delivery approved', 'Your delivery is now available for riders.');
+          ensureJoinDelivery();
+          return data;
         })
+        .catch(error => {
+          console.error(error);
+          alert(error.message || 'Approval failed.');
+        });
+    }
+
+    if (approvalCodeInput) {
+      ['input', 'change', 'keyup'].forEach(eventName => approvalCodeInput.addEventListener(eventName, updateApprovalUi));
+    }
+    if (copyCodeBtn) {
+      copyCodeBtn.addEventListener('click', async () => {
+        const text = (approvalCodeInput?.value || '').trim();
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus('Code copied to clipboard.');
+        } catch (e) {
+          alert('Copy this code: ' + text);
+        }
       });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Approval failed');
-
-      setStatus('Approved. Waiting for rider.');
-      document.getElementById('approveBtn').style.display = 'none';
-    } catch (e) {
-      alert(e.message);
-      console.error(e);
     }
-  });
-
-  document.getElementById('handoverAckBtn').addEventListener('click', () => {
-    alert('Recipient marked: handover confirmed (UI only). Driver updates the real backend status.');
-  });
-
-  document.getElementById('paidAckBtn').addEventListener('click', () => {
-    alert('Recipient marked: paid (UI only). Driver updates the real backend status.');
-  });
-
-  updateApprovalUi();
-  const hintEl = document.getElementById('approvalHint');
-  if (hintEl) hintEl.classList.add('code-hint-pulse');
-
-  // Initialize on refresh
-  window.addEventListener('load', () => {
-    const dId = document.getElementById('deliveryId').value;
-    if (dId) {
-      socket.emit('join_delivery', { delivery_id: parseInt(dId, 10) });
+    if (approveBtn) {
+      approveBtn.addEventListener('click', handleApprove);
     }
+
+    const handoverAckBtn = document.getElementById('handoverAckBtn');
+    if (handoverAckBtn) {
+      handoverAckBtn.addEventListener('click', async () => {
+        const deliveryId = Number(document.getElementById('deliveryId')?.value || 0);
+        if (!deliveryId) {
+          setStatus('No active delivery to confirm.', true);
+          return;
+        }
+        try {
+          setStatus('Confirming handover...');
+          const res = await fetch('/api/recipient_confirm_handover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delivery_id: deliveryId })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Handover confirmation failed');
+          setStatus('Handover confirmed. Delivery complete!');
+          showDeliveryBanner('Right us with START — delivery is complete!');
+          handoverAckBtn.disabled = true;
+          const paidBtn = document.getElementById('paidAckBtn');
+          if (paidBtn) paidBtn.disabled = false;
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : 'Handover confirmation failed';
+          setStatus(msg, true);
+          try { spawnNotification('Handover Error', msg, 'error'); } catch (e) {}
+          try { showDeliveryBanner('Error confirming handover: ' + msg); } catch (e) {}
+        }
+      });
+    }
+
+    socket && socket.on('connect', () => {
+      setStatus('Connected.');
+      if (userId > 0) {
+        socket && socket.emit('join_user', { user_id: userId });
+      }
+      ensureJoinDelivery();
+    });
+    document.getElementById('downloadReceiptBtn')?.addEventListener('click', downloadReceipt);
+
+    socket && socket.on('delivery_initial', payload => {
+      applyDeliveryPayload(payload);
+    });
+
+    socket && socket.on('delivery_status_update', payload => {
+      applyDeliveryPayload(payload);
+    });
+
+    socket && socket.on('rider_location_update', payload => {
+      if (!payload || payload.lat == null || payload.lon == null) return;
+      const next = [payload.lat, payload.lon];
+      riderMarker.setLatLng(next);
+      map.panTo(next);
+      updateEtaFromGps(payload.lat, payload.lon, Date.now());
+      if (pickupLatLng && dropoffLatLng) {
+        if (!trackingPolyline) {
+          trackingPolyline = L.polyline([next], { color: '#00b894', weight: 5, opacity: 0.9 }).addTo(map);
+        } else {
+          const latlngs = trackingPolyline.getLatLngs();
+          const last = latlngs.length ? latlngs[latlngs.length - 1] : null;
+          const dist = last ? map.distance(L.latLng(last.lat, last.lng), L.latLng(next[0], next[1])) : Infinity;
+          if (dist >= 8) {
+            latlngs.push(L.latLng(next[0], next[1]));
+            trackingPolyline.setLatLngs(latlngs);
+          }
+        }
+      }
+    });
+
+    syncDeliveryState();
+    updateApprovalUi();
   });
 </script>
 {% endblock %}

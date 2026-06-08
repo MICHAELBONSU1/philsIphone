@@ -2,28 +2,300 @@
 
 {% block title %}Messages - Phil's iPhone{% endblock %}
 
+{% block extra_css %}
+<style>
+    .msg-unread-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #e74c3c;
+        border-radius: 50%;
+        display: inline-block;
+        margin-left: 5px;
+    }
+    .search-results {
+        list-style: none;
+        padding: 0;
+        margin-top: 10px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: rgb(176, 10, 10);
+    }
+    .search-results li {
+        padding: 10px 15px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+    .search-results li:last-child {
+        border-bottom: none;
+    }
+    .search-results li:hover {
+        background: #f20707;
+    }
+    .call-buttons {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+    }
+    .call-btn {
+        background: rgba(255,255,255,0.1);
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        color: #667eea;
+        font-size: 18px;
+        cursor: not-allowed;
+        opacity: 0.6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+    .call-btn:hover:not(:disabled) {
+        background: rgba(102, 126, 234, 0.2);
+        transform: scale(1.1);
+    }
+    .call-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+    .call-btn:not(:disabled):hover {
+        cursor: pointer;
+    }
+
+    /* ── Call Modal ─────────────────────────────────────────────────────── */
+    .call-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: callModalFadeIn 0.25s ease;
+    }
+    @keyframes callModalFadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .call-modal {
+        background: linear-gradient(160deg, #1a1f2e 0%, #111620 100%);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 20px 80px rgba(0, 0, 0, 0.65);
+        width: 400px;
+        max-width: 95vw;
+        text-align: center;
+        color: white;
+        animation: callModalSlideUp 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        overflow: hidden;
+    }
+    @keyframes callModalSlideUp {
+        from { transform: translateY(30px) scale(0.97); opacity: 0; }
+        to   { transform: translateY(0)      scale(1);    opacity: 1; }
+    }
+
+    .call-modal-ring {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 38px auto 14px;
+        font-size: 50px;
+        color: #fff;
+        position: relative;
+    }
+    .call-modal-ring::before {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 2.5px solid rgba(102, 126, 234, 0.4);
+        animation: callRingPulse 2s ease-in-out infinite;
+    }
+    .call-modal-ring::after {
+        content: '';
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        border: 2px solid rgba(102, 126, 234, 0.18);
+        animation: callRingPulse 2s ease-in-out infinite 0.5s;
+    }
+    @keyframes callRingPulse {
+        0%, 100% { transform: scale(1);   opacity: 0.7; }
+        50%       { transform: scale(1.12); opacity: 0.3; }
+    }
+
+    .call-modal-status {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 2px;
+        letter-spacing: 0.3px;
+    }
+    .call-modal-name {
+        font-size: 26px;
+        font-weight: 700;
+        margin-bottom: 22px;
+        color: #fff;
+    }
+
+    /* Incoming call buttons */
+    .call-modal-actions {
+        display: flex;
+        gap: 30px;
+        justify-content: center;
+        padding: 0 30px 32px;
+    }
+    .call-modal-btn-circle {
+        width: 62px;
+        height: 62px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        font-size: 24px;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .call-modal-btn-circle:hover {
+        transform: scale(1.12);
+    }
+
+    .call-modal-accept {
+        background: #25d366;
+        box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45);
+    }
+    .call-modal-decline {
+        background: #e74c3c;
+        box-shadow: 0 4px 20px rgba(231, 76, 60, 0.45);
+    }
+    .call-modal-end {
+        background: #e74c3c;
+        box-shadow: 0 4px 20px rgba(231, 76, 60, 0.45);
+        margin: 0 auto 30px;
+    }
+
+    /* Active-call control buttons row */
+    .call-modal-controls {
+        display: flex;
+        gap: 18px;
+        justify-content: center;
+        padding: 0 20px 24px;
+    }
+    .call-modal-ctrl-btn {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        font-size: 20px;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s, transform 0.2s;
+    }
+    .call-modal-ctrl-btn:hover {
+        transform: scale(1.08);
+    }
+    .call-modal-ctrl-btn.active {
+        background: #fff;
+        color: #1a1f2e;
+    }
+    .call-modal-ctrl-btn.mute-on {
+        background: #e74c3c;
+    }
+    .call-modal-ctrl-btn.speaker-on {
+        background: #ffc107;
+        color: #1a1f2e;
+    }
+    /* Static voice-overlay pulse during active call */
+    .call-modal-ring.ring-inactive::before,
+    .call-modal-ring.ring-inactive::after {
+        animation: none;
+        opacity: 0;
+    }
+
+    /* Voice recording pulse animation */
+    @keyframes voicePulse {
+        0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+        50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+    }
+    #voice-record-btn.recording-active {
+        background-color: #dc3545 !important;
+        transform: scale(1.15);
+        box-shadow: 0 0 15px rgba(220, 53, 69, 0.4);
+    }
+    #voice-record-btn {
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    #voice-timer {
+        font-family: monospace;
+        font-weight: bold;
+        color: #dc3545;
+        font-size: 14px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="messages-page">
     <input type="hidden" id="my-user-id" value="{{ session.get('user_id', 0) }}">
-    <div class="conversations-sidebar">
-
-        <h3>Users</h3>
-        <ul class="user-list" id="user-list">
+    
+<div class="conversations-sidebar">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <h3 style="margin:0;">Conversations</h3>
+            <button type="button" id="new-chat-btn" class="btn" style="background: rgba(102, 126, 234, 0.15); color:#667eea; padding: 8px 12px; font-weight:800;">➕</button>
+        </div>
+        <div id="new-chat-search" style="display:none; margin-top: 10px;">
+            <input type="text" id="search-user-input" placeholder="Search user by name or email..." style="width:100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+            <ul id="search-results-list" class="search-results"></ul>
+        </div>
+        <ul class="user-list" id="user-list" style="margin-top:15px;">
             {% for user in users %}
             <li>
                 <button class="user-btn" data-user-id="{{ user.id }}" data-username="{{ user.username }}">
                     <i class="fas fa-user"></i> {{ user.username }}
-                    <span class="msg-unread-badge" data-user-username="{{ user.username }}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px; display:none;">0</span>
+                    {% if user.unread_count > 0 %}
+                        <span class="msg-unread-badge" data-user-id="{{ user.id }}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px;">{{ user.unread_count }}</span>
+                        <span class="msg-unread-dot" data-user-id="{{ user.id }}" style="margin-left:8px; width:10px; height:10px; border-radius:50%; background:#e74c3c;"></span>
+                    {% else %}
+                        <span class="msg-unread-badge" data-user-id="{{ user.id }}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px; display:none;">0</span>
+                        <span class="msg-unread-dot" data-user-id="{{ user.id }}" style="margin-left:8px; width:10px; height:10px; border-radius:50%; background:#e74c3c; display:none;"></span>
+                    {% endif %}
                 </button>
             </li>
             {% endfor %}
         </ul>
-
     </div>
     <div class="chat-main">
-        <div class="chat-header" id="chat-header">
-            <span>Select a user to start messaging</span>
+    <div class="chat-header" id="chat-header">
+        <div id="header-user-info" style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+            <i class="fas fa-user"></i>
+            <span id="header-user-name">Select a user to start messaging</span>
         </div>
+        <div class="call-buttons">
+            <button id="video-call-btn" class="call-btn" title="Video Call" disabled>
+                <i class="fas fa-video"></i>
+            </button>
+            <button id="audio-call-btn" class="call-btn" title="Audio Call" disabled>
+                <i class="fas fa-phone"></i>
+            </button>
+        </div>
+    </div>
         <div class="chat-messages" id="chat-messages">
             <div class="no-messages">Choose a conversation to view messages</div>
         </div>
@@ -33,24 +305,126 @@
                 <input type="file" id="media-file" accept="image/*,video/*,audio/*" style="display: none;">
 
                 <!-- Voice note recorder -->
-                <button type="button" id="voice-record-btn" class="btn" style="background:#17a2b8; color:white;">🎤</button>
+                <button type="button" id="voice-record-btn" class="btn" style="background:#17a2b8; color:white; position: relative; overflow: hidden;">
+                    <i class="fas fa-microphone"></i>
+                    <span class="voice-recording-pulse" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; animation: voicePulse 1.5s infinite; display: none;"></span>
+                </button>
                 <button type="button" id="voice-send-btn" class="btn" style="display:none; background:#28a745; color:white;">Send Voice</button>
-                <span id="voice-recording-indicator" style="display:none; color:#dc3545; font-weight:700; font-size:12px; align-self:center;">Recording...</span>
+                <div id="voice-recording-indicator" style="display:none; align-items:center; gap:8px; margin-left: 10px;">
+                    <span style="color:#dc3545; font-weight:700; font-size:12px;">Recording...</span>
+                    <span id="voice-timer">00:00</span>
+                </div>
 
                 <button type="button" id="media-btn" class="btn" style="background: #6c757d; color: white;">📎</button>
                 <button type="submit" class="btn btn-primary">Send</button>
             </div>
         </form>
+        <!-- Call Modal (inbound / outbound / active) -->
+        <div id="call-modal-overlay" class="call-modal-overlay" style="display:none;">
+            <div class="call-modal" id="call-modal-box">
+                <!-- Incoming call -->
+                <div id="call-state-incoming">
+                    <div class="call-modal-ring"><i class="fas fa-arrow-down call-type-icon"></i></div>
+                    <div class="call-modal-status">Incoming call</div>
+                    <div class="call-modal-name" id="call-incoming-name">—</div>
+                    <div class="call-modal-actions">
+                        <button class="call-modal-btn-circle call-modal-accept" id="call-btn-accept" title="Accept">
+                            <i class="fas fa-phone"></i>
+                        </button>
+                        <button class="call-modal-btn-circle call-modal-decline" id="call-btn-decline" title="Decline">
+                            <i class="fas fa-phone-slash"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Outgoing call -->
+                <div id="call-state-outgoing" style="display:none;">
+                    <div class="call-modal-ring ring-inactive"><i class="fas fa-arrow-up call-type-icon"></i></div>
+                    <div class="call-modal-status">Calling…</div>
+                    <div class="call-modal-name" id="call-outgoing-name">—</div>
+                    <div class="call-modal-btn-circle call-modal-end" id="call-btn-end-outgoing">
+                        <i class="fas fa-phone-slash"></i>
+                    </div>
+                </div>
+                <!-- Active call -->
+                <div id="call-state-active" style="display:none;">
+                    <div class="call-modal-ring ring-inactive"><i class="fas fa-user call-type-icon"></i></div>
+                    <div class="call-modal-status" id="call-timer">00:00</div>
+                    <div class="call-modal-name" id="call-active-name">—</div>
+                    <div class="call-modal-controls">
+                        <button class="call-modal-ctrl-btn" id="call-btn-mute"   title="Mute / Unmute">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <button class="call-modal-ctrl-btn" id="call-btn-speaker" title="Speaker">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                        <button class="call-modal-ctrl-btn call-modal-end" id="call-btn-end-active" title="End Call">
+                            <i class="fas fa-phone-slash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 var currentChatUserId = null;
 var currentChatUsername = null;
-const users = JSON.parse('{{ users|tojson }}');
+
+// Proactively request camera/microphone permissions on page load
+// This helps ensure permissions are granted before a call or recording is attempted.
+document.addEventListener('DOMContentLoaded', async () => {
+    // Only attempt the proactive prompt once per browser
+    if (localStorage.getItem('findmy_media_perms_proactive_done')) {
+        return;
+    }
+
+    // Only request if we are in a secure context (HTTPS/Localhost)
+    if (window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            // Stop the tracks immediately; we just wanted the permission prompt.
+            stream.getTracks().forEach(track => track.stop());
+            localStorage.setItem('findmy_media_perms_proactive_done', 'true');
+            console.log('[permissions] Microphone and camera access granted.');
+        } catch (err) {
+            console.warn('[permissions] Proactive permission request failed:', err.name);
+            // Mark as done even on failure/denial to respect the user's initial interaction
+            localStorage.setItem('findmy_media_perms_proactive_done', 'true');
+        }
+    }
+
+    // Register Service Worker for background persistence
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/js/sw.js').catch(err => {
+            console.warn('[PWA] Service Worker registration failed:', err);
+        });
+    }
+});
+
+const activePartners = (function(){
+    try {
+        // Use | safe to ensure the JSON string isn't HTML-escaped
+        const raw = '{{ users_json | default("[]") | safe }}';
+        return JSON.parse(raw);
+    } catch (e) {
+        console.error('[messages] Failed to parse activePartners:', e);
+        return [];
+    }
+})();
+const myUserId = Number(document.getElementById('my-user-id')?.value || 0);
+
+// Debounce helper to limit API calls during typing
+function debounce(func, delay) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), delay);
+    };
+}
 
 function setNavBadgeTotal(count) {
     const navCount = document.getElementById('messages-nav-count');
@@ -60,16 +434,23 @@ function setNavBadgeTotal(count) {
 }
 
 
-function updateUnreadBadgeForUser(username, unreadCount) {
-    const badge = document.querySelector('.msg-unread-badge[data-user-username="' + username + '"]');
-    if (!badge) return;
+function updateUnreadBadgeForUser(userId, unreadCount) {
+    const badge = document.querySelector('.msg-unread-badge[data-user-id="' + userId + '"]');
+    const dot = document.querySelector('.msg-unread-dot[data-user-id="' + userId + '"]');
+    if (!badge && !dot) return;
 
     if (unreadCount > 0) {
-        badge.textContent = unreadCount;
-        badge.style.display = 'inline-block';
+        if (badge) {
+            badge.textContent = unreadCount;
+            badge.style.display = 'inline-block';
+        }
+        if (dot) dot.style.display = 'inline-block';
     } else {
-        badge.textContent = '0';
-        badge.style.display = 'none';
+        if (badge) {
+            badge.textContent = '0';
+            badge.style.display = 'none';
+        }
+        if (dot) dot.style.display = 'none';
     }
 
     // also update total nav badge (sum of all sidebar badges)
@@ -103,31 +484,114 @@ function startUnreadPolling() {
 startUnreadPolling();
 
 // --- Socket.IO real-time messaging ---
-const socket = io({ transports: ['websocket'] });
+// Use the global socket defined in base.html (may be null if io() is unavailable)
+var socket = window.globalSocket || (window.io ? window.io() : null);
+if (!socket) { console.warn('[messages] socket.io unavailable – real-time messaging disabled'); }
 
-// Join per-user room once socket connects.
-// We use the logged-in user's id from a hidden value rendered into the DOM.
-const myUserId = Number(document.getElementById('my-user-id')?.value || 0);
-if (myUserId) {
-    socket.on('connect', function() {
-        socket.emit('join_user', { user_id: myUserId });
-    });
+
+// --- Notifications (browser system notifications) ---
+const notificationSound = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=');
+let notificationPermissionRequested = false;
+let notificationsEnabled = false;
+
+async function ensureNotificationsPermission() {
+    if (notificationPermissionRequested) return notificationsEnabled;
+    notificationPermissionRequested = true;
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') {
+        notificationsEnabled = true;
+        return true;
+    }
+    if (Notification.permission === 'denied') {
+        notificationsEnabled = false;
+        return false;
+    }
+    try {
+        const perm = await Notification.requestPermission();
+        notificationsEnabled = perm === 'granted';
+        return notificationsEnabled;
+    } catch (e) {
+        notificationsEnabled = false;
+        return false;
+    }
 }
 
+function showChatNotification({ title, body, url }) {
+    if (!notificationsEnabled) return;
+    try {
+        const options = {
+            body: body,
+            icon: '/static/images/logo1.png',
+            badge: '/static/images/logo1.png',
+            tag: 'phil-iphone-system-notif', // Groups notifications to prevent spam
+            renotify: true,
+            silent: false
+        };
+        const notif = new Notification(title, options);
+        notif.onclick = function() {
+            window.focus();
+            if (url) window.location.href = url;
+            notif.close();
+        };
+    } catch (e) {
+        // ignore
+    }
+}
 
-socket.on('new_message', function(payload) {
+function playNotificationSound() {
+    try {
+        notificationSound.currentTime = 0;
+        notificationSound.play().catch(() => {});
+    } catch (e) {
+        // ignore
+    }
+}
+
+function shouldNotifyForIncoming(otherId) {
+    if (!currentChatUserId) return true;
+    return Number(currentChatUserId) !== Number(otherId);
+}
+
+// Prevent duplicate UI inserts when Socket.IO fires twice (or when user refreshes chat while message arrives)
+const _seenIncomingMessageIds = new Set();
+const _SEEN_MAX = 500;
+function _markSeen(id) {
+    if (!id) return true;
+    const key = String(id);
+    if (_seenIncomingMessageIds.has(key)) return false;
+    _seenIncomingMessageIds.add(key);
+    if (_seenIncomingMessageIds.size > _SEEN_MAX) {
+        // simple trim: keep only last N (approx)
+        const arr = Array.from(_seenIncomingMessageIds);
+        _seenIncomingMessageIds.clear();
+        arr.slice(-_SEEN_MAX).forEach(x => _seenIncomingMessageIds.add(x));
+    }
+    return true;
+}
+
+socket && socket.on('new_message', function(payload) {
     // payload.other_user_id = sender id (when I receive)
     const otherId = payload && payload.other_user_id;
     const msg = payload && payload.message;
     if (!otherId || !msg) return;
+    if (!_markSeen(msg.id)) return;
 
-    // If currently viewing this chat, append immediately; otherwise just bump unread badge.
+    const otherUsername = (msg && msg.sender) ? String(msg.sender) : null;
+
+    // If currently viewing this chat, append immediately; otherwise just bump unread badge + notify.
     if (currentChatUserId && Number(currentChatUserId) === Number(otherId)) {
         // Mark read optimistically
-        socket.emit('mark_read_thread', { other_user_id: otherId });
-        // Append message to current UI (simple append if in-memory DOM exists)
+        socket && socket.emit('mark_read_thread', { other_user_id: otherId });
+
         const container = document.getElementById('chat-messages');
-        if (container) {
+        
+        // Detect if the user is currently looking at this tab
+        const isHidden = document.hidden;
+
+        if (container && !isHidden) {
+            // If we already rendered this msg id into the current DOM, don't append again
+            if (container.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+
             const div = document.createElement('div');
             const isMe = !!msg.is_me;
             div.className = isMe ? 'message message-sent' : 'message message-received';
@@ -151,32 +615,70 @@ socket.on('new_message', function(payload) {
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
+
+        // If the phone is backgrounded/tab hidden, show a real system notification
+        if (isHidden) {
+            const title = otherUsername ? ('New message from ' + otherUsername) : 'New message';
+            const body = (msg && msg.content && msg.content.trim()) ? msg.content.trim() : (msg.media_type ? ('Sent a ' + msg.media_type) : 'Message');
+            showChatNotification({ title, body });
+            playNotificationSound();
+        }
     } else {
-        // Update unread badge for sidebar user
-        updateUnreadBadgeForUser(String(otherId), 1);
+        // Update unread badge for sidebar user.
+        let existingBadge = document.querySelector('.msg-unread-badge[data-user-id="' + otherId + '"]');
+
+        if (!existingBadge) {
+            // User not in sidebar: add them dynamically
+            const userList = document.getElementById('user-list');
+            const newLi = document.createElement('li');
+            newLi.innerHTML = `
+                <button class="user-btn" data-user-id="${otherId}" data-username="${otherUsername || 'User'}">
+                    <i class="fas fa-user"></i> ${otherUsername || 'User'}
+                    <span class="msg-unread-badge" data-user-id="${otherId}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px;">1</span>
+                    <span class="msg-unread-dot" data-user-id="${otherId}" style="margin-left:8px; width:10px; height:10px; border-radius:50%; background:#e74c3c;"></span>
+                </button>
+            `;
+            userList.prepend(newLi);
+            attachUserBtnClickHandlers();
+        } else {
+            const currentCount = parseInt(existingBadge.textContent, 10) || 0;
+            updateUnreadBadgeForUser(otherId, currentCount + 1);
+        }
+
+        // Browser notification + sound
+        ensureNotificationsPermission().then(enabled => {
+            if (!enabled) return;
+            const title = otherUsername ? ('New message from ' + otherUsername) : 'New message';
+            const body = (msg && msg.content && msg.content.trim()) ? msg.content.trim() : (msg.media_type ? ('Sent a ' + msg.media_type) : 'Message');
+            showChatNotification({ title, body });
+            playNotificationSound();
+        });
     }
 
-    // refresh nav badge total
     refreshNavBadgeTotal();
 });
 
-socket.on('typing_on', function(data) {
-    if (!data || typeof data.from_user_id === 'undefined') return;
-    if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) {
-        showTypingIndicator(true);
-    }
+// Handle generic system notifications (delivery, news, alerts)
+socket && socket.on('system_notification', function(data) {
+    if (!data) return;
+    ensureNotificationsPermission().then(enabled => {
+        if (!enabled) return;
+        showChatNotification({
+            title: data.title || 'System Notification',
+            body: data.message || '',
+            url: data.url
+        });
+        playNotificationSound();
+    });
 });
 
-
-socket.on('typing_off', function(data) {
-    if (!data || typeof data.from_user_id === 'undefined') return;
-    if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) {
-        showTypingIndicator(false);
-    }
-});
+socket && socket.on('typing_on', function(data) { if (!data || typeof data.from_user_id === 'undefined') return; if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) { showTypingIndicator(true); } });
 
 
-socket.on('read_updated', function(data) {
+socket && socket.on('typing_off', function(data) { if (!data || typeof data.from_user_id === 'undefined') return; if (currentChatUserId && Number(currentChatUserId) === Number(data.from_user_id)) { showTypingIndicator(false); } });
+
+
+socket && socket.on('read_updated', function(data) {
     if (!data) return;
     // If I just opened this thread, update badges
     if (currentChatUserId && Number(currentChatUserId) === Number(data.other_user_id)) {
@@ -204,17 +706,28 @@ function showTypingIndicator(on) {
 
 
 
-document.querySelectorAll('.user-btn').forEach(btn => {
-
-    btn.addEventListener('click', function() {
+function attachUserBtnClickHandlers() {
+    document.querySelectorAll('.user-btn').forEach(btn => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
         currentChatUserId = this.getAttribute('data-user-id');
         currentChatUsername = this.getAttribute('data-username');
-        document.getElementById('chat-header').innerHTML = '<span>Chat with ' + currentChatUsername + '</span>';
+        var nameEl = document.getElementById('header-user-name');
+        if (nameEl) { nameEl.textContent = 'Chat with ' + currentChatUsername; }
+        enableCallButtons();
         loadMessages(currentChatUserId);
     });
-});
+    });
+}
+
+attachUserBtnClickHandlers();
 
 function loadMessages(userId) {
+    enableCallButtons();
 
     // keep polling running even while refreshing chat thread
     const container = document.getElementById('chat-messages');
@@ -227,26 +740,23 @@ function loadMessages(userId) {
         shouldStickToBottom = distanceFromBottom < 1000; // if user is near bottom, follow new messages
     }
 
-socket.emit('mark_read_thread', { other_user_id: Number(userId) });
+    socket && socket.emit('mark_read_thread', { other_user_id: Number(userId) });
 
-    // typing indicator
-    socket.emit('typing', { other_user_id: Number(userId), is_typing: true });
+
+    // Typing indicator (send typing status to the other user)
+    socket && socket.emit('typing', { other_user_id: Number(userId), is_typing: true });
     setTimeout(() => {
-        socket.emit('typing', { other_user_id: Number(userId), is_typing: false });
+        socket && socket.emit('typing', { other_user_id: Number(userId), is_typing: false });
     }, 1200);
 
 
-fetch('/get_messages/' + userId)
-
-
-
-
+    fetch('/get_messages/' + userId)
         .then(res => res.json())
         .then(messages => {
 
             // update unread counts for this thread
-            const unread = messages.filter(m => !m.is_me).length;
-            updateUnreadBadgeForUser(userId, unread);
+            // This is handled by the backend now, so we just reset to 0 when opening the chat
+            updateUnreadBadgeForUser(userId, 0);
 
             const container = document.getElementById('chat-messages');
 
@@ -324,39 +834,82 @@ let voiceBlob = null;
 const voiceRecordBtn = document.getElementById('voice-record-btn');
 const voiceSendBtn = document.getElementById('voice-send-btn');
 const voiceRecordingIndicator = document.getElementById('voice-recording-indicator');
+const voiceTimer = document.getElementById('voice-timer');
+
+let voiceTimerInterval = null;
+let voiceStartTime = null;
+let currentRecordingStream = null;
+let isHoldingRecord = false;
+
+function updateVoiceTimer() {
+    const now = Date.now();
+    const elapsed = Math.floor((now - voiceStartTime) / 1000);
+    const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const secs = String(elapsed % 60).padStart(2, '0');
+    if (voiceTimer) voiceTimer.textContent = `${mins}:${secs}`;
+}
 
 function setVoiceUiState({recording, hasVoice}) {
+    const pulse = voiceRecordBtn.querySelector('.voice-recording-pulse');
     if (recording) {
-        voiceRecordingIndicator.style.display = 'inline';
-        voiceRecordBtn.disabled = true;
+        voiceRecordingIndicator.style.display = 'flex';
+        voiceRecordBtn.classList.add('recording-active');
+        if (pulse) pulse.style.display = 'block';
         voiceSendBtn.style.display = 'none';
     } else {
         voiceRecordingIndicator.style.display = 'none';
-        voiceRecordBtn.disabled = false;
+        voiceRecordBtn.classList.remove('recording-active');
+        if (pulse) pulse.style.display = 'none';
         voiceSendBtn.style.display = hasVoice ? 'inline-flex' : 'none';
     }
 }
 
 async function startVoiceRecording() {
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
-        alert('Voice recording is not supported in this browser.');
+    if (!window.MediaRecorder) {
+        alert('Voice recording is not supported by this browser. If you are on an iPhone, please ensure you are using iOS 14.5 or later.');
+        return;
+    }
+
+    if (!navigator.mediaDevices) {
+        if (!window.isSecureContext) {
+            if (window.location.protocol === 'http:') {
+                if (confirm('Microphone access is blocked because this connection is not secure (HTTP).\n\nWould you like to switch to "https://" now to enable recording?')) {
+                    window.location.protocol = 'https:';
+                }
+            } else {
+                alert('Microphone access is restricted by Safari security policies.\n\nEven though you are on HTTPS, raw IP addresses with self-signed certificates often fail the "Secure Context" check.\n\nTry using your Mac\'s hostname instead (e.g., https://' + (window.location.hostname.includes('.') ? window.location.hostname : 'your-mac-name.local') + ':' + window.location.port + ')');
+            }
+        } else {
+            alert('Microphone access is not supported by your browser or environment.');
+        }
         return;
     }
 
     // reset
     voiceBlob = null;
+    if (voiceTimer) voiceTimer.textContent = '00:00';
     setVoiceUiState({recording:true, hasVoice:false});
 
-    // Some browsers/devices may not expose microphones consistently.
-    // Request the exact permission and fail fast with a useful error.
-    const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+    try {
+        // Using simple 'audio: true' constraints is more reliable for initial permission on mobile
+        currentRecordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        if (!isHoldingRecord) {
+            stopStream();
+            setVoiceUiState({recording:false, hasVoice:false});
+            return;
         }
-    });
-    mediaRecorder = new MediaRecorder(stream);
+
+        let mimeType = 'audio/webm';
+        if (window.MediaRecorder && !MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/mp4';
+        
+        mediaRecorder = new MediaRecorder(currentRecordingStream, { mimeType });
+    } catch (err) {
+        console.error('Mic access failed:', err);
+        setVoiceUiState({recording:false, hasVoice:false});
+        throw err;
+    }
+
 
     const chunks = [];
     mediaRecorder.ondataavailable = (e) => {
@@ -364,60 +917,70 @@ async function startVoiceRecording() {
     };
 
     mediaRecorder.onstop = () => {
-        // stop tracks
-        stream.getTracks().forEach(t => t.stop());
+        if (voiceTimerInterval) clearInterval(voiceTimerInterval);
+        stopStream();
 
-        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
         voiceBlob = blob;
 
         setVoiceUiState({recording:false, hasVoice:true});
-
-        // Keep mime type in mind: backend accepts common audio extensions.
-        // We will send using a synthesized filename when posting.
     };
 
+    voiceStartTime = Date.now();
+    voiceTimerInterval = setInterval(updateVoiceTimer, 1000);
     mediaRecorder.start();
 }
 
+function stopStream() {
+    if (currentRecordingStream) {
+        currentRecordingStream.getTracks().forEach(t => t.stop());
+        currentRecordingStream = null;
+    }
+}
+
 function stopVoiceRecording() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
     }
 }
 
 if (voiceRecordBtn && voiceSendBtn) {
-    // Better UX for iOS/Safari/Android: do NOT rely on “click” toggling.
-    // Use press-and-hold with pointer events: press -> record, release -> stop
-    // Then user can press “Send Voice”.
     voiceRecordBtn.addEventListener('pointerdown', async function(e) {
-        e.preventDefault();
+        try { voiceRecordBtn.setPointerCapture(e.pointerId); } catch(ex) {}
         if (!currentChatUserId) {
             alert('Select a conversation first.');
             return;
         }
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') return;
+        if (isHoldingRecord) return;
+        isHoldingRecord = true;
+
         try {
             await startVoiceRecording();
         } catch (err) {
             console.error('startVoiceRecording failed:', err);
-            const msg = (err && (err.name || err.message)) ? (err.name + (err.message ? ': ' + err.message : '')) : String(err);
-            alert('Microphone error: ' + msg);
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                alert('Microphone access is blocked. Please click the lock icon (or "View Site Information") in your address bar and toggle the Microphone switch to "Allow", then refresh the page.');
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                alert('No microphone detected. Please connect a microphone and try again.');
+            } else {
+                const msg = (err && (err.name || err.message)) ? (err.name + (err.message ? ': ' + err.message : '')) : String(err);
+                if (msg.toLowerCase().includes('secure') || !window.isSecureContext) {
+                    alert('Microphone access requires a secure connection (HTTPS).');
+                }
+            }
+            isHoldingRecord = false;
             setVoiceUiState({recording:false, hasVoice:false});
         }
     });
 
     voiceRecordBtn.addEventListener('pointerup', function(e) {
-        e.preventDefault();
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            stopVoiceRecording();
-        }
+        isHoldingRecord = false;
+        stopVoiceRecording();
     });
 
     voiceRecordBtn.addEventListener('pointercancel', function(e) {
-        e.preventDefault();
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            stopVoiceRecording();
-        }
+        isHoldingRecord = false;
+        stopVoiceRecording();
     });
 
     voiceSendBtn.addEventListener('click', function() {
@@ -427,15 +990,13 @@ if (voiceRecordBtn && voiceSendBtn) {
         }
         if (!voiceBlob) return;
 
-        // Build a File so backend sees it as an upload
-        // IMPORTANT: backend validates by file extension (allowed_media_file).
-        // Keep the extension in an allowed list (mp3/wav/ogg/m4a). MediaRecorder on web
-        // often outputs WebM/Opus, so we keep the extension as .webm but also send the
-        // real mime type—however backend extension check must pass. We therefore use
-        // .ogg as the fallback extension (common for opus recordings) and keep mime.
-        // If your browser records only webm, this still passes extension check.
-        const fileName = 'voice_note_' + Date.now() + '.ogg';
-        const voiceFile = new File([voiceBlob], fileName, { type: voiceBlob.type || 'audio/ogg' });
+        // Map mime type to extension for backend validation
+        let extension = 'webm';
+        if (voiceBlob.type.includes('mp4') || voiceBlob.type.includes('apple')) extension = 'm4a';
+        else if (voiceBlob.type.includes('ogg')) extension = 'ogg';
+
+        const fileName = `voice_note_${Date.now()}.${extension}`;
+        const voiceFile = new File([voiceBlob], fileName, { type: voiceBlob.type });
 
         const formData = new FormData();
         formData.append('receiver', currentChatUsername);
@@ -451,20 +1012,41 @@ if (voiceRecordBtn && voiceSendBtn) {
             method: 'POST',
             body: formData
         })
-        .then(res => res.json())
+        .then(async res => {
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return res.json();
+            }
+            const text = await res.text();
+            throw new Error(text.substring(0, 100) || 'Server error');
+        })
         .then(data => {
             if (data.success) {
                 voiceBlob = null;
                 voiceSendBtn.style.display = 'none';
                 document.getElementById('media-btn').textContent = '📎';
                 loadMessages(currentChatUserId);
+                
+                // Add to sidebar now that a message exists
+                if (!document.querySelector(`.user-btn[data-user-id="${currentChatUserId}"]`)) {
+                    const userList = document.getElementById('user-list');
+                    const newLi = document.createElement('li');
+                    newLi.innerHTML = `
+                        <button class="user-btn" data-user-id="${currentChatUserId}" data-username="${currentChatUsername}">
+                            <i class="fas fa-user"></i> ${currentChatUsername}
+                            <span class="msg-unread-badge" data-user-id="${currentChatUserId}" style="margin-left:auto; display:none;">0</span>
+                            <span class="msg-unread-dot" data-user-id="${currentChatUserId}" style="display:none;"></span>
+                        </button>`;
+                    userList.prepend(newLi);
+                    attachUserBtnClickHandlers();
+                }
             } else {
                 alert('Failed to send voice message: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(err => {
             console.error('Voice send error:', err);
-            alert('Network error sending voice message');
+            alert('Error sending voice message: ' + err.message);
         });
     });
 }
@@ -488,7 +1070,14 @@ document.getElementById('chat-form').addEventListener('submit', function(e) {
         method: 'POST',
         body: formData
     })
-    .then(res => res.json())
+    .then(async res => {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            return res.json();
+        }
+        const text = await res.text();
+        throw new Error(text.substring(0, 100) || 'Server error');
+    })
     .then(data => {
         console.log('Send response:', data);
         if (data.success) {
@@ -496,15 +1085,567 @@ document.getElementById('chat-form').addEventListener('submit', function(e) {
             document.getElementById('media-file').value = '';
             document.getElementById('media-btn').textContent = '📎';
             loadMessages(currentChatUserId);
+
+            // Add to sidebar now that a message exists
+            if (!document.querySelector(`.user-btn[data-user-id="${currentChatUserId}"]`)) {
+                const userList = document.getElementById('user-list');
+                const newLi = document.createElement('li');
+                newLi.innerHTML = `
+                    <button class="user-btn" data-user-id="${currentChatUserId}" data-username="${currentChatUsername}">
+                        <i class="fas fa-user"></i> ${currentChatUsername}
+                        <span class="msg-unread-badge" data-user-id="${currentChatUserId}" style="margin-left:auto; display:none;">0</span>
+                        <span class="msg-unread-dot" data-user-id="${currentChatUserId}" style="display:none;"></span>
+                    </button>`;
+                userList.prepend(newLi);
+                attachUserBtnClickHandlers();
+            }
         } else {
             alert('Failed to send message: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(err => {
         console.error('Send error:', err);
-        alert('Network error sending message');
+        alert('Error sending message: ' + err.message);
     });
 });
+
+// --- Call functionality (WebRTC via Socket.IO signaling) ---
+var callIncomingFrom = null;        // Stores from_user_id during an incoming call
+var callActiveOtherId = null;      // target user id once connected
+var callLogId        = null;        // id of the active CallLog row
+var callTypeLabel = 'video';       // 'video' | 'audio'
+var callTimerInterval = null;
+var callMuted = false;
+var callSpeaker = false;
+
+// ─── WebRTC internals ───────────────────────────────────────────
+var _callerPC   = null;
+var _answererPC = null;
+var _localStream = null;
+var _remoteAudioEl = null;
+
+var _pcConfig = {
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+};
+
+function _buildPC(onIce, onTrack) {
+    var pc = new RTCPeerConnection(_pcConfig);
+
+    pc.onicecandidate = function(e) {
+        if (e.candidate) {
+            if (!callActiveOtherId) return;
+            socket && socket.emit('webrtc_ice_candidate', {
+                to_user_id:     callActiveOtherId,
+                candidate:      e.candidate.candidate,
+                sdpMid:         e.candidate.sdpMid,
+                sdpMLineIndex:  e.candidate.sdpMLineIndex,
+            }, { namespace: '/' });
+        }
+    };
+
+    pc.oniceconnectionstatechange = function() {
+        console.log('[webrtc] iceConnectionState =>', pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            if (_remoteAudioEl && _remoteAudioEl.srcObject && _remoteAudioEl.paused) {
+                _remoteAudioEl.play().catch(function() {});
+            }
+        }
+        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+            hideCallModal();
+        }
+    };
+
+    if (onTrack) { pc.ontrack = onTrack; }
+    return pc;
+}
+
+async function _getLocalMedia(callType) {
+    if (_localStream) { _localStream.getTracks().forEach(function(t) { t.stop(); }); }
+    try {
+        _localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression:  true,
+                autoGainControl:   true,
+            },
+            video: callType === 'video',
+        });
+        return _localStream;
+    } catch(err) {
+        console.error('[webrtc] getUserMedia error:', err);
+        alert('Microphone permission denied or not available.');
+        return null;
+    }
+}
+
+function _getRemoteAudioEl() {
+    if (!_remoteAudioEl) {
+        _remoteAudioEl = new Audio();
+        _remoteAudioEl.autoplay    = true;
+        _remoteAudioEl.playsInline = true;
+        _remoteAudioEl.volume      = 0.85;
+        _remoteAudioEl.style.display = 'none';
+        document.body.appendChild(_remoteAudioEl);
+    }
+    return _remoteAudioEl;
+}
+
+function initCallButtons() {
+    const videoCallBtn = document.getElementById('video-call-btn');
+    const audioCallBtn = document.getElementById('audio-call-btn');
+    
+    if (videoCallBtn) {
+        videoCallBtn.addEventListener('click', function() {
+            if (!this.disabled) { initiateCall('video'); }
+        });
+    }
+    if (audioCallBtn) {
+        audioCallBtn.addEventListener('click', function() {
+            if (!this.disabled) { initiateCall('audio'); }
+        });
+    }
+}
+
+function hideCallModal() {
+    tearDownCall();
+}
+
+async function handleOfferAnswer(offerSdp, peerId) {
+    if (!offerSdp) return;   // guard: must be a real offer
+
+    var stream = await _getLocalMedia(callTypeLabel);
+    if (!stream) { hideCallModal(); return; }
+
+    // Tear down any stale answerer PC (e.g. from a previous aborted call)
+    if (_answererPC) { _answererPC.close(); _answererPC = null; }
+
+    _answererPC = _buildPC(null, function onTrack(e) {
+        var el = _getRemoteAudioEl();
+        if (el.srcObject !== e.streams[0]) { el.srcObject = e.streams[0]; }
+        el.play().catch(function() {});
+    });
+
+    stream.getTracks().forEach(function(t) {
+        _answererPC.addTrack(t, stream);
+    });
+
+    try {
+        await _answererPC.setRemoteDescription(
+            new RTCSessionDescription({ type: 'offer', sdp: offerSdp })
+        );
+        var answer = await _answererPC.createAnswer();
+        await _answererPC.setLocalDescription(answer);
+        socket && socket.emit('webrtc_answer', {
+            to_user_id: peerId,
+            answer_sdp: answer.sdp,
+        }, { namespace: '/' });
+        // Switch from "incoming" state to "active call" state now that an
+        // answer is on its way back to the caller.
+        showActiveCallModal(callIncomingFrom ? callIncomingFrom.toString() : '—');
+    } catch(err) {
+        console.error('[webrtc] handleOfferAnswer failed:', err);
+        hideCallModal();
+    }
+}
+
+function handleAnswerSdp(answerSdp) {
+    if (!_callerPC || !answerSdp) return;
+    _callerPC.setRemoteDescription(
+        new RTCSessionDescription({ type: 'answer', sdp: answerSdp })
+    ).catch(function(err) { console.error('[webrtc] setRemoteDescription failed:', err); });
+}
+
+function showIncomingCallModal(fromUsername, callType) {
+    callTypeLabel = callType;
+    const overlay   = document.getElementById('call-modal-overlay');
+    const iconEl    = document.querySelector('#call-state-incoming .call-type-icon');
+    const nameEl    = document.getElementById('call-incoming-name');
+    const incEl     = document.getElementById('call-state-incoming');
+    const outEl     = document.getElementById('call-state-outgoing');
+    const actEl     = document.getElementById('call-state-active');
+    const acceptEl  = document.getElementById('call-btn-accept');
+    const declineEl = document.getElementById('call-btn-decline');
+    if (!overlay || !nameEl || !incEl || !outEl || !actEl || !acceptEl || !declineEl) return;
+
+    if (iconEl) { iconEl.className = callType === 'video'
+        ? 'fas fa-video call-type-icon'
+        : 'fas fa-phone call-type-icon'; }
+    nameEl.textContent = fromUsername || 'Unknown';
+    incEl.style.display = '';
+    outEl.style.display = 'none';
+    actEl.style.display = 'none';
+    overlay.style.display = 'flex';
+
+    acceptEl.onclick = function() {
+        console.log('[call] accept clicked', { from: callIncomingFrom, log_id: callLogId });
+        socket && socket.emit('call_accept', {
+            from_user_id: callIncomingFrom,
+            log_id:       callLogId,
+            call_type:    callTypeLabel
+        }, {
+            namespace: '/'
+        });
+        callActiveOtherId = callIncomingFrom;
+    };
+    declineEl.onclick = function() {
+        socket && socket.emit('call_reject', { from_user_id: callIncomingFrom, log_id: callLogId }, { namespace: '/' });
+        hideCallModal();
+    };
+}
+
+function showCallingModal(toUsername, callType) {
+    callTypeLabel = callType;
+    const overlay   = document.getElementById('call-modal-overlay');
+    const iconEl    = document.querySelector('#call-state-outgoing .call-type-icon');
+    const nameEl    = document.getElementById('call-outgoing-name');
+    const incEl     = document.getElementById('call-state-incoming');
+    const outEl     = document.getElementById('call-state-outgoing');
+    const actEl     = document.getElementById('call-state-active');
+    const endEl     = document.getElementById('call-btn-end-outgoing');
+    if (!overlay || !nameEl || !incEl || !outEl || !actEl || !endEl) return;
+
+    if (iconEl) { iconEl.className = callType === 'video'
+        ? 'fas fa-video call-type-icon'
+        : 'fas fa-phone call-type-icon'; }
+    nameEl.textContent = toUsername || 'Unknown';
+    incEl.style.display = 'none';
+    outEl.style.display = '';
+    actEl.style.display = 'none';
+    overlay.style.display = 'flex';
+
+    endEl.onclick = function() {
+        // Ensure both sides teardown even if local peer-state wasn't fully established.
+        const otherId = callActiveOtherId || Number(currentChatUserId);
+        socket && socket.emit('call_end', { other_user_id: otherId, log_id: callLogId }, { namespace: '/' });
+        hideCallModal();
+    };
+}
+
+function showActiveCallModal(otherUsername) {
+    const overlay  = document.getElementById('call-modal-overlay');
+    const iconEl   = document.querySelector('#call-state-active .call-type-icon');
+    const nameEl   = document.getElementById('call-active-name');
+    const timerEl  = document.getElementById('call-timer');
+    const muteEl   = document.getElementById('call-btn-mute');
+    const speakEl  = document.getElementById('call-btn-speaker');
+    const endEl    = document.getElementById('call-btn-end-active');
+    const incEl    = document.getElementById('call-state-incoming');
+    const outEl    = document.getElementById('call-state-outgoing');
+    const actEl    = document.getElementById('call-state-active');
+    if (!overlay || !nameEl || !timerEl || !muteEl || !speakEl || !endEl || !incEl || !outEl || !actEl) return;
+
+    // Both sides must have a PeerConnection to be in active-call state.
+    // Caller always has _callerPC; answerer always has _answererPC.
+    if (!_callerPC && !_answererPC) return;
+
+    if (iconEl) { iconEl.className = callTypeLabel === 'video'
+        ? 'fas fa-video call-type-icon'
+        : 'fas fa-phone call-type-icon'; }
+    nameEl.textContent = otherUsername || '—';
+
+    incEl.style.display  = 'none';
+    outEl.style.display = 'none';
+    actEl.style.display = '';
+
+    // Prepare remote audio element so it's ready when tracks arrive
+    var remoteAudio = _getRemoteAudioEl();
+    remoteAudio.srcObject = null;   // clear previous stream
+
+    overlay.style.display = 'flex';
+
+    // Reset mute / speaker controls
+    muteEl.className  = 'call-modal-ctrl-btn';
+    muteEl.innerHTML  = '<i class="fas fa-microphone"></i>';
+    speakEl.className = 'call-modal-ctrl-btn';
+    speakEl.innerHTML = '<i class="fas fa-volume-up"></i>';
+
+    // Start call timer
+    if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+    var elapsed = 0;
+    updateTimerDisplay(elapsed);
+    callTimerInterval = setInterval(function() {
+        elapsed++;
+        updateTimerDisplay(elapsed);
+    }, 1000);
+
+    // Mute toggle
+    muteEl.onclick = function() {
+        callMuted = !callMuted;
+        this.className = 'call-modal-ctrl-btn' + (callMuted ? ' mute-on' : '');
+        this.innerHTML = callMuted
+            ? '<i class="fas fa-microphone-slash"></i>'
+            : '<i class="fas fa-microphone"></i>';
+    };
+
+    // Speaker toggle
+    speakEl.onclick = function() {
+        callSpeaker = !callSpeaker;
+        this.className = 'call-modal-ctrl-btn' + (callSpeaker ? ' speaker-on' : '');
+        this.innerHTML = callSpeaker
+            ? '<i class="fas fa-volume-off"></i>'
+            : '<i class="fas fa-volume-up"></i>';
+    };
+
+    // End call
+endEl.onclick = function() {
+        // Tear down both peers deterministically even if log_id isn't known.
+        const otherId = (callActiveOtherId !== null && typeof callActiveOtherId !== 'undefined')
+            ? callActiveOtherId
+            : (currentChatUserId !== null ? Number(currentChatUserId) : null);
+        socket && socket.emit('call_end', { other_user_id: otherId, log_id: callLogId }, { namespace: '/' });
+        tearDownCall();
+        hideCallModal();
+    };
+}
+
+function updateTimerDisplay(seconds) {
+    var el = document.getElementById('call-timer');
+    if (!el) return;
+    var m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    var s = String(seconds % 60).padStart(2, '0');
+    el.textContent = m + ':' + s;
+}
+
+function tearDownCall() {
+    if (_localStream) {
+        _localStream.getTracks().forEach(function(t) { t.stop(); });
+        _localStream = null;
+    }
+    if (_callerPC)   { _callerPC.close();   _callerPC   = null; }
+    if (_answererPC) { _answererPC.close(); _answererPC = null; }
+    if (_remoteAudioEl) {
+        _remoteAudioEl.pause();
+        _remoteAudioEl.srcObject = null;
+        _remoteAudioEl = null;
+    }
+    if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+    callIncomingFrom  = null;
+    callActiveOtherId = null;
+    callLogId         = null;
+    callMuted         = false;
+    callSpeaker       = false;
+}
+
+async function initiateCall(callType) {
+    if (!currentChatUserId) return;
+    callActiveOtherId = Number(currentChatUserId);
+
+    socket && socket.emit('call_initiate', {
+        other_user_id: Number(currentChatUserId),
+        call_type:     callType,
+    }, { namespace: '/' });
+
+    showCallingModal(currentChatUsername, callType);
+
+    var stream = await _getLocalMedia(callType);
+    if (!stream) { hideCallModal(); return; }
+
+    _callerPC = _buildPC(null, function onTrack(e) {
+        var el = _getRemoteAudioEl();
+        if (el.srcObject !== e.streams[0]) { el.srcObject = e.streams[0]; }
+        el.play().catch(function() {});
+    });
+
+    stream.getTracks().forEach(function(t) {
+        _callerPC.addTrack(t, stream);
+    });
+
+    try {
+        var offer = await _callerPC.createOffer();
+        await _callerPC.setLocalDescription(offer);
+        socket && socket.emit('webrtc_offer', {
+            to_user_id: callActiveOtherId,
+            offer_sdp:  offer.sdp,
+        }, { namespace: '/' });
+    } catch(err) {
+        console.error('[webrtc] createOffer failed:', err);
+        hideCallModal();
+    }
+}
+
+// ── Socket.IO call signaling ─────────────────────────────────────────
+socket && socket.on('call_incoming', function(data) {
+    if (!data) return;
+    callIncomingFrom = data && (data.from_user_id || data.fromUserId);
+    callLogId = data && data.log_id ? data.log_id : null;
+    if (data.from_username) showIncomingCallModal(data.from_username, data.call_type);
+});
+
+// ── WebRTC SDP exchange ─────────────────────────────────────────
+socket && socket.on('webrtc_offer', function(data) {
+    if (!data || !data.offer_sdp || !callIncomingFrom) return;
+    handleOfferAnswer(data.offer_sdp, data.from_user_id || callIncomingFrom);
+});
+
+socket && socket.on('webrtc_answer', function(data) {
+    if (!data || !data.answer_sdp) return;
+    handleAnswerSdp(data.answer_sdp);
+});
+
+socket && socket.on('webrtc_ice_candidate', function(data) {
+    if (!data || !data.candidate) return;
+    var pc = _callerPC || _answererPC;
+    if (!pc) return;
+    try {
+        pc.addIceCandidate(new RTCIceCandidate({
+            candidate:      data.candidate,
+            sdpMid:         data.sdpMid,
+            sdpMLineIndex:  data.sdpMLineIndex,
+        }));
+    } catch(err) {
+        console.error('[webrtc] addIceCandidate failed:', err);
+    }
+});
+
+socket && socket.on('call_accepted', function(data) {
+    if (data && data.by_username) { showActiveCallModal(data.by_username); }
+    else if (currentChatUsername) { showActiveCallModal(currentChatUsername); }
+    if (data && data.log_id) { callLogId = data.log_id; }
+});
+
+socket && socket.on('call_rejected', function() {
+    hideCallModal();
+    spawnNotification('Call Rejected', 'Your call was rejected', 'info');
+});
+
+socket && socket.on('call_ended', function(data) {
+    // data may contain {log_id}. Always teardown UI + media.
+    try {
+        // Always reset internal state first
+        tearDownCall();
+
+        // Hide overlay immediately (some mobile browsers may not repaint if only Peer teardown happens)
+        const overlay = document.getElementById('call-modal-overlay');
+        if (overlay) overlay.style.display = 'none';
+
+        // Also force-hide call state panels
+        const incEl = document.getElementById('call-state-incoming');
+        const outEl = document.getElementById('call-state-outgoing');
+        const actEl = document.getElementById('call-state-active');
+        if (incEl) incEl.style.display = 'none';
+        if (outEl) outEl.style.display = 'none';
+        if (actEl) actEl.style.display = 'none';
+
+        // Force timer stop in case UI state got out of sync.
+        if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+
+        // Fallback: ensure teardown modal-close is applied even if hideCallModal() wasn't called
+        hideCallModal();
+
+        if (typeof spawnNotification === 'function') {
+            spawnNotification('Call Ended', 'The call has ended', 'info');
+        }
+    } catch (e) {
+        console.error('[call_ended] teardown failed', e);
+    }
+});
+
+
+// Enable call buttons when a user is selected
+function enableCallButtons() {
+    // If call signaling ever breaks, prevent stale click handlers from sticking around.
+    // (Call modal teardown happens via call_ended anyway.)
+
+
+    const videoCallBtn = document.getElementById('video-call-btn');
+    const audioCallBtn = document.getElementById('audio-call-btn');
+    if (!videoCallBtn || !audioCallBtn) return;
+
+    if (currentChatUserId) {
+        videoCallBtn.disabled = false;
+        audioCallBtn.disabled = false;
+        videoCallBtn.style.opacity    = '1';
+        audioCallBtn.style.opacity    = '1';
+        videoCallBtn.style.cursor     = 'pointer';
+        audioCallBtn.style.cursor     = 'pointer';
+    } else {
+        videoCallBtn.disabled = true;
+        audioCallBtn.disabled = true;
+        videoCallBtn.style.opacity    = '0.6';
+        audioCallBtn.style.opacity    = '0.6';
+        videoCallBtn.style.cursor     = 'not-allowed';
+        audioCallBtn.style.cursor     = 'not-allowed';
+    }
+}
+
+// Init call buttons and set initial button state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initCallButtons();
+    enableCallButtons();
+});
+
+document.getElementById('search-user-input').addEventListener('input', debounce(function() {
+    const query = this.value.trim();
+    const resultsList = document.getElementById('search-results-list');
+    
+    if (query.length < 1) {
+        resultsList.innerHTML = '';
+        return;
+    }
+    
+    fetch('/api/search_users?q=' + encodeURIComponent(query))
+        .then(res => res.json())
+        .then(users => {
+            if (users.length === 0) {
+                resultsList.innerHTML = '<li style="color:#888; padding:10px;">No users found</li>';
+                return;
+            }
+            resultsList.innerHTML = users.map(u => 
+                '<li data-user-id="' + u.id + '" data-username="' + u.username + '" style="cursor:pointer;">' + u.username + '</li>'
+            ).join('');
+            attachSearchItemHandlers();
+        })
+        .catch(err => {
+            console.error('Search error:', err);
+            resultsList.innerHTML = '<li style="color:#e74c3c; padding:10px;">Error searching</li>';
+        });
+}, 300));
+
+// Plus button to start new chat
+document.getElementById('new-chat-btn').addEventListener('click', function() {
+    var searchDiv = document.getElementById('new-chat-search');
+    searchDiv.style.display = (searchDiv.style.display === 'none') ? 'block' : 'none';
+    if (searchDiv.style.display === 'block') {
+        document.getElementById('search-user-input').focus();
+    }
+});
+
+function attachSearchItemHandlers() {
+    document.querySelectorAll('#search-results-list li').forEach(li => {
+        if (li.dataset.bound === '1') return;
+        li.dataset.bound = '1';
+        li.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            const username = this.dataset.username;
+            
+            // Hide search
+            document.getElementById('new-chat-search').style.display = 'none';
+            document.getElementById('search-user-input').value = '';
+            document.getElementById('search-results-list').innerHTML = '';
+            
+            // Check if user button already exists
+            let btn = document.querySelector('.user-btn[data-user-id="' + userId + '"]');
+            if (btn) {
+                btn.click();
+                return;
+            }
+            
+            // Create new button in sidebar
+            const userList = document.getElementById('user-list');
+            const newLi = document.createElement('li');
+            newLi.innerHTML = `
+                <button class="user-btn" data-user-id="${userId}" data-username="${username}">
+                    <i class="fas fa-user"></i> ${username}
+                    <span class="msg-unread-badge" data-user-id="${userId}" style="margin-left:auto; padding:2px 8px; border-radius:999px; background: #e74c3c; color:#fff; font-size:12px; display:none;">0</span>
+                    <span class="msg-unread-dot" data-user-id="${userId}" style="margin-left:8px; width:10px; height:10px; border-radius:50%; background:#e74c3c; display:none;"></span>
+                </button>
+            `;
+            userList.prepend(newLi);
+            attachUserBtnClickHandlers();
+            newLi.querySelector('.user-btn').click();
+        });
+    });
+}
 
 var urlParams = new URLSearchParams(window.location.search);
 var toUser = urlParams.get('to');

@@ -51,7 +51,7 @@
 
       <div class="btn-row">
         <button id="lookupBtn" class="btn btn-primary">Lookup Delivery</button>
-        <button id="approveBtn" class="btn btn-success" style="display:none;">
+        <button id="approveBtn" class="btn btn-success">
           <i class="fas fa-check"></i> Approve Delivery
         </button>
       </div>
@@ -93,17 +93,17 @@
 {% block extra_js %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
 <script>
-  const socket = io();
+  // Socket provided by base.html; guard null for offline/CDN-miss
+  var socket = window.globalSocket || (window.io ? window.io() : null);
+  if (!socket) { console.warn('[delivery_recipient_senderid] socket.io unavailable'); }
 
   const map = L.map('map').setView([5.6037, -0.1870], 12);
 
-  socket.on('connect', () => {
+  socket && socket.on('connect', () => {
     const container = document.querySelector('.container[data-user-id]');
     const userId = container ? Number(container.dataset.userId) : 0;
-    if (userId) socket.emit('join_user', { user_id: userId });
+    if (userId) socket && socket.emit('join_user', { user_id: userId });
   });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -163,18 +163,26 @@
 
         if (routePolyline) {
           routePolyline.setLatLngs(latlngs);
+          routePolyline.setStyle({ color: '#2f80ed', weight: 4, opacity: 0.9, dashArray: '12, 8', lineJoin: 'round', lineCap: 'round' });
         } else {
-          routePolyline = L.polyline(latlngs, { color: '#2f80ed', weight: 4, opacity: 0.8 }).addTo(map);
+          routePolyline = L.polyline(latlngs, {
+            color: '#2f80ed',
+            weight: 4,
+            opacity: 0.9,
+            dashArray: '12, 8',
+            lineJoin: 'round',
+            lineCap: 'round'
+          }).addTo(map);
         }
       })
       .catch(() => {});
   }
 
-  socket.on('connect', () => {
+  socket && socket.on('connect', () => {
     setStatus('connected');
   });
 
-  socket.on('delivery_initial', (payload) => {
+  socket && socket.on('delivery_initial', (payload) => {
     if (!payload) return;
     if (payload.pickup_lat != null) {
       pickupLatLng = [payload.pickup_lat, payload.pickup_lon];
@@ -190,33 +198,30 @@
     }
   });
 
-  socket.on('delivery_status_update', (payload) => {
-    if (!payload) return;
-    const deliveryIdInput = document.getElementById('deliveryId');
-    if (payload.delivery_id && deliveryIdInput.value && String(payload.delivery_id) !== String(deliveryIdInput.value)) return;
+   socket && socket.on('delivery_status_update', (payload) => {
+      if (!payload) return;
+      const deliveryIdInput = document.getElementById('deliveryId');
+      if (payload.delivery_id && deliveryIdInput.value && String(payload.delivery_id) !== String(deliveryIdInput.value)) return;
 
-    if (payload.delivery_id && !deliveryIdInput.value) {
-      deliveryIdInput.value = String(payload.delivery_id);
-      socket.emit('join_delivery', { delivery_id: payload.delivery_id });
-    }
+      if (payload.delivery_id && !deliveryIdInput.value) {
+        deliveryIdInput.value = String(payload.delivery_id);
+        socket && socket.emit('join_delivery', { delivery_id: payload.delivery_id });
+     }
 
-    setStatus('status updated: ' + (payload.status || 'unknown'));
-    renderTimeline(payload);
+      // Auto-fill approval code if the backend sends it
+      if (payload.approval_code) {
+        const codeInput = document.getElementById('approvalCodeInput');
+        if (codeInput) {
+          codeInput.value = String(payload.approval_code);
+          updateApprovalUi(); // enable approve button
+        }
+      }
 
-    const approveBtn = document.getElementById('approveBtn');
-    if (payload.status === 'pending_recipient') {
-      approveBtn.style.display = 'inline-flex';
-      approveBtn.classList.remove('approve-pop');
-      // force reflow so animation restarts
-      void approveBtn.offsetWidth;
-      approveBtn.classList.add('approve-pop');
-    } else {
-      approveBtn.style.display = 'none';
-      approveBtn.classList.remove('approve-pop');
-    }
-  });
+      setStatus('status updated: ' + (payload.status || 'unknown'));
+      renderTimeline(payload);
+    });
 
-  socket.on('rider_location_update', (payload) => {
+   socket && socket.on('rider_location_update', (payload) => {
     if (!payload) return;
     if (payload.lat == null || payload.lon == null) return;
 
@@ -293,10 +298,18 @@
       document.getElementById('deliveryId').value = String(data.delivery_id);
       setStatus('joining delivery #' + data.delivery_id);
 
-      socket.emit('join_delivery', { delivery_id: data.delivery_id });
+      // Auto-fill approval code if the API returned it
+      if (data.approval_code) {
+        const codeInput2 = document.getElementById('approvalCodeInput');
+        if (codeInput2) {
+          codeInput2.value = String(data.approval_code);
+          updateApprovalUi(); // enable approve button
+        }
+      }
 
-      // Until a status update arrives, keep approve hidden.
-      document.getElementById('approveBtn').style.display = 'none';
+      socket && socket.emit('join_delivery', { delivery_id: data.delivery_id });
+
+      // Approve button is always visible
     } catch (e) {
       console.error(e);
       alert(e.message);
@@ -304,12 +317,19 @@
     }
   });
 
-  document.getElementById('approveBtn').addEventListener('click', async () => {
-    const deliveryId = document.getElementById('deliveryId').value;
-    if (!deliveryId) return;
+   document.getElementById('approveBtn').addEventListener('click', async () => {
+     const deliveryId = document.getElementById('deliveryId').value;
+     if (!deliveryId) {
+       alert('No delivery selected. Look up a delivery first.');
+       return;
+     }
 
-    try {
-      const approvalCode = (document.getElementById('approvalCodeInput').value || '').trim();
+     try {
+       const approvalCode = (document.getElementById('approvalCodeInput').value || '').trim();
+       if (!approvalCode) {
+         alert('Enter the approval code first.');
+         return;
+       }
 
       const res = await fetch('/api/recipient_approve_delivery', {
         method: 'POST',
@@ -321,11 +341,34 @@
       if (!res.ok) throw new Error(data.error || 'Approval failed');
 
       setStatus('Approved. Waiting for rider.');
-      document.getElementById('approveBtn').style.display = 'none';
     } catch (e) {
       alert(e.message);
       console.error(e);
     }
   });
+
+  // On load and on every reconnect, always ensure we know the delivery ID
+  async function syncDeliveryIdSender() {
+    try {
+      const userId = document.querySelector('.container[data-user-id]')?.dataset.userId;
+      if (!userId) return;
+      const res2 = await fetch('/api/recipient_pending_delivery');
+      const data2 = await res2.json().catch(() => ({}));
+      if (data2.delivery_id) {
+        const input2 = document.getElementById('deliveryId');
+        if (input2) input2.value = String(data2.delivery_id);
+        socket && socket.emit('join_delivery', { delivery_id: data2.delivery_id });
+      }
+      if (data2.approval_code) {
+        const codeInput3 = document.getElementById('approvalCodeInput');
+        if (codeInput3) {
+          codeInput3.value = String(data2.approval_code);
+          updateApprovalUi();
+        }
+      }
+    } catch(e) { /* best-effort */ }
+  }
+  window.addEventListener('load', syncDeliveryIdSender);
+  socket && socket.on('reconnect', syncDeliveryIdSender);
 </script>
 {% endblock %}

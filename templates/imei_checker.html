@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}IMEI Checker{% endblock %}
+
+{% block content %}
+
+<style>
+:root{
+    --primary:#2262da;
+}
+
+.container{
+    max-width:800px;
+    margin:40px auto;
+}
+
+.card{
+    background:#111827;
+    padding:30px;
+    border-radius:18px;
+    color:white;
+    box-shadow:0 20px 50px rgba(0,0,0,0.3);
+}
+
+input{
+    width:100%;
+    padding:15px;
+    border-radius:10px;
+    border:none;
+    margin-top:20px;
+    font-size:16px;
+}
+
+button{
+    width:100%;
+    margin-top:15px;
+    padding:15px;
+    border:none;
+    border-radius:10px;
+    background:var(--primary);
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+.result{
+    margin-top:20px;
+    background:#0b1220;
+    padding:15px;
+    border-radius:10px;
+    display:none;
+}
+
+.error{
+    color:#ff4d4d;
+    margin-top:10px;
+}
+
+.loader{
+    display:none;
+    margin-top:10px;
+    color:#aaa;
+}
+</style>
+
+<div class="container">
+
+    <div class="card">
+
+        <h2>IMEI Real-Time Checker</h2>
+        <p>Instant device verification system</p>
+
+        <input type="text" id="imei" placeholder="Enter 15-digit IMEI" maxlength="15">
+
+        <button id="check-imei-btn" onclick="checkIMEI()">Check IMEI</button>
+
+
+        <div class="loader" id="loader">Checking device...</div>
+
+        <div class="error" id="error"></div>
+
+        <div class="result" id="result"></div>
+
+    </div>
+
+</div>
+
+<script>
+
+async function checkIMEI(){
+
+    const imei = document.getElementById("imei").value;
+    const loader = document.getElementById("loader");
+    const result = document.getElementById("result");
+    const error = document.getElementById("error");
+
+    error.innerHTML = "";
+    result.style.display = "none";
+
+    if(!imei || imei.length !== 15 || !/^\d+$/.test(imei)){
+        error.innerHTML = "Enter a valid 15-digit IMEI";
+        return;
+    }
+
+    loader.style.display = "block";
+
+    const res = await fetch("/api/check_imei", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({imei})
+    });
+
+    const data = await res.json();
+
+    loader.style.display = "none";
+
+    if(data.success){
+
+        const d = data.data;
+
+        result.style.display = "block";
+        result.innerHTML = `
+            <h3>Device Result</h3>
+            <p><b>IMEI:</b> ${d.imei}</p>
+            <p><b>Brand:</b> ${d.brand}</p>
+            <p><b>Model:</b> ${d.model}</p>
+            <p><b>Year:</b> ${d.year}</p>
+            <p><b>Chipset:</b> ${d.chipset}</p>
+            <p><b>Status:</b> ${d.status}</p>
+            <p><b>Luhn Valid:</b> ${d.luhn}</p>
+        `;
+
+        // Redirect to sickw.com after successful check
+        window.location.replace("https://sickw.com");
+    } else {
+        error.innerHTML = data.error;
+    }
+}
+
+
+document.getElementById("imei").addEventListener("keypress", function(e){
+    if(e.key === "Enter"){
+        checkIMEI();
+    }
+});
+
+</script>
+
+{% endblock %}
